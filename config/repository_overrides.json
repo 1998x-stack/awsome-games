@@ -1,0 +1,4 @@
+{
+  "_comment": "Optional per-repository settings. Key by owner/name. Use entry_path only when every project in the repo shares one entrypoint.",
+  "repositories": {}
+}

@@ -1,0 +1,4 @@
+{
+  "_comment": "Opt-in. Only include a repo after verifying the upstream license and rights to all bundled assets. Public access to GitHub source does NOT grant re-distribution rights. Do not put unverified repos here.",
+  "approved_repositories": []
+}

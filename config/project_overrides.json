@@ -1,0 +1,4 @@
+{
+  "_comment": "Optional per-project corrections. Key by stable project id or slug. entry_path is repository-relative. route is appended to the game URL when required.",
+  "projects": {}
+}
