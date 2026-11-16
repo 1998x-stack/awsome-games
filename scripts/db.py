@@ -350,8 +350,15 @@ def seed_database(conn: sqlite3.Connection, seed_path: Path = SEED_PATH):
     count = 0
     if seed_path.exists():
         seed_rows=[json.loads(line) for line in seed_path.read_text(encoding='utf-8').splitlines() if line.strip()]
-    else:
+    elif seed_path.resolve() == SEED_PATH.resolve():
+        # The bundled SQLite snapshot may have stable IDs that differ from the
+        # fallback curated list. Never merge fallback rows into a populated DB.
+        if conn.execute('SELECT COUNT(*) FROM projects').fetchone()[0]:
+            conn.commit()
+            return 0
         seed_rows=build_curated_seed_rows()
+    else:
+        raise FileNotFoundError(f'Explicit seed file not found: {seed_path}')
     for p in seed_rows:
         pid = p.get("project_id") or "fab_" + hashlib.sha1((p.get("title", "") + p.get("source_url", "")).encode()).hexdigest()[:14]
         slug = slugify(p.get("title", ""), pid)
