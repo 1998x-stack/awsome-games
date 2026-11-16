@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10131b">
+  <meta name="description" content="Claude Fable 5.1 / 5.2 游戏与创意编程作品数据库。浏览、检索公开项目，并尝试运行已收录源码的游戏。">
+  <title>Awsome Games · Fable 游戏与创意编程数据库</title>
+  <link rel="stylesheet" href="./assets/style.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="eyebrow"><span class="pulse"></span> OPEN CREATIVE CODE CATALOG</div>
+      <h1>Awsome <span>Games</span></h1>
+      <p class="hero-copy">一个持续生长的 AI 游戏与创意编程档案库。按类型发现作品，追溯原作者与源码仓库，并在浏览器中尝试运行已收录的 HTML 游戏。</p>
+      <div class="hero-links">
+        <a href="https://github.com/1998x-stack/awsome-games" target="_blank" rel="noopener noreferrer">GitHub Repository ↗</a>
+        <a href="https://github.com/1998x-stack/awsome-games/blob/main/docs/SCHEMA.md" target="_blank" rel="noopener noreferrer">数据结构与采集说明 ↗</a>
+      </div>
+    </div>
+  </header>
+  <main class="page-shell">
+    <section class="stats" aria-label="数据库统计">
+      <div class="stat"><strong id="stat-projects">—</strong><span>收录作品</span></div>
+      <div class="stat"><strong id="stat-repos">—</strong><span>源码仓库</span></div>
+      <div class="stat"><strong id="stat-demos">—</strong><span>在线演示</span></div>
+      <div class="stat"><strong id="stat-entrypoints">—</strong><span>发现 HTML 入口</span></div>
+    </section>
+
+    <section class="catalog-head">
+      <div><div class="section-kicker">THE COLLECTION</div><h2>探索作品</h2><p id="catalog-caption">正在加载目录…</p></div>
+      <button class="quiet-button" id="export-csv" type="button">导出当前结果 ↓</button>
+    </section>
+
+    <section class="filters" aria-label="筛选作品">
+      <label class="search-box"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="搜索作品、作者、技术、仓库…" autocomplete="off"></label>
+      <select id="model-filter" aria-label="模型版本"><option value="">全部模型版本</option><option value="5.1">Fable 5.1</option><option value="5.2">Fable 5.2</option><option value="unknown">未标注</option></select>
+      <select id="type-filter" aria-label="作品类型"><option value="">全部作品类型</option></select>
+      <select id="category-filter" aria-label="作品分类"><option value="">全部分类</option></select>
+      <select id="source-filter" aria-label="源码状态"><option value="">全部源码状态</option><option value="repo">有仓库记录</option><option value="cloned">已采集源码</option><option value="entry">发现 HTML 入口</option><option value="demo">仅有在线演示</option></select>
+    </section>
+    <div class="results-line"><span id="result-count">—</span><span class="legend"><i class="dot dot-entry"></i>发现 HTML 入口 <i class="dot dot-repo"></i>有仓库记录 <i class="dot dot-demo"></i>在线演示</span></div>
+    <section id="project-grid" class="project-grid" aria-live="polite"><div class="loading">正在载入作品数据库…</div></section>
+    <div id="empty-state" class="empty-state" hidden>没有找到符合条件的作品。试试减少筛选条件。</div>
+    <div class="load-more-wrap"><button id="load-more" class="load-more" type="button" hidden>加载更多作品</button></div>
+    <footer class="site-footer">
+      <div><strong>Awsome Games</strong><span>由 1998x-stack 维护的开放研究目录</span></div>
+      <p>作品归属、模型版本与源码关系以各条记录的证据为准。收录仓库不代表已获再分发授权；克隆和部署前请检查原项目许可证。页面不会自动执行构建脚本。</p>
+    </footer>
+  </main>
+
+  <dialog id="play-dialog" class="play-dialog">
+    <div class="play-header"><div><span class="section-kicker">BROWSER PLAYER</span><h2 id="play-title">游戏试玩</h2></div><div class="play-actions"><a id="open-game" href="#" target="_blank" rel="noopener noreferrer" hidden>访问原作者演示 ↗</a><button id="close-player" class="icon-button" type="button" aria-label="关闭">✕</button></div></div>
+    <div id="player-notice" class="player-notice">游戏来自第三方公开仓库，在隔离 iframe 中加载。若无法运行，可尝试新窗口打开。</div>
+    <div class="player-stage"><iframe id="game-frame" title="游戏画面" sandbox="allow-scripts allow-pointer-lock allow-forms allow-modals" allow="fullscreen; autoplay; gamepad; clipboard-read; clipboard-write" referrerpolicy="no-referrer"></iframe></div>
+  </dialog>
+  <script src="./assets/app.js" defer></script>
+</body>
+</html>

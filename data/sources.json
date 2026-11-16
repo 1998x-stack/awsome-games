@@ -1,0 +1,11 @@
+[
+  {"name":"Fable 5.2 game source index","url":"https://github.com/ygx2378/awesome-fable-5-2-games","kind":"repository_index","scope":"64 source-indexed games and repository links; counts may change"},
+  {"name":"Fable 5.2 live and video collection","url":"https://github.com/fengyiqicoder/awesome-fable-5.2","kind":"community_index","scope":"Live projects and video demonstrations"},
+  {"name":"Fable 5.2 standalone HTML experiments","url":"https://github.com/MiaAI-Lab/Claude-Fable-5.2-HTML-Files","kind":"source_collection","scope":"76 standalone HTML studies with prompt files"},
+  {"name":"Fable 5.1 one-shot arcade","url":"https://github.com/sorrycc/fable-arcade","kind":"source_collection","scope":"Fable 5.1 mini-games and prompts"},
+  {"name":"Fable 5.2 prompt cases","url":"https://github.com/apimodels/claude-fable-5-2-prompts","kind":"prompt_index","scope":"Prompt and case provenance; not every case is a source repository"},
+  {"name":"Fable 5.2 community video collection","url":"https://github.com/sandbase-lab/awesome-fable-5-2","kind":"video_index","scope":"Video references; not equivalent to downloadable source code"},
+  {"name":"VibeGamer Claude Fable collection","url":"https://vibegamer.io/made-with/claude-fable-5-2","kind":"playable_index","scope":"Public browser demos"},
+  {"name":"FableList","url":"https://fablelist.000ooo.ooo/","kind":"community_index","scope":"Community-submitted works"},
+  {"name":"Awesome Claude Fable Games","url":"https://github.com/ummydev/awesome-claude-fable-games","kind":"community_index","scope":"Supplemental game index"}
+]

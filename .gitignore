@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+.DS_Store
+.cache/
+# Generated exports (SQLite catalog.sqlite is intentionally versioned)
+data/catalog.json
+data/projects.csv
+data/repositories.csv
+data/summary.json
+data/collection_report.json
+data/fetch_log.json
+data/raw/
+data/fable_projects.sqlite
+data/catalog.sqlite-shm
+data/catalog.sqlite-wal
+# Generated Pages artifact; games/_repos is intentionally versioned after collection
+site/data/
+site/games/
+site/build-manifest.json
+site/.nojekyll
+
+data/projects.jsonl
