@@ -1,0 +1,40 @@
+name: Restore stable-ID seed snapshot
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/recover-seed.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  reconstruct:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Recover 155 stable project IDs from committed SQLite
+        run: |
+          python scripts/export_seed.py
+          python - <<'PY'
+          import json, sqlite3
+          from pathlib import Path
+          rows=[json.loads(x) for x in Path('data/seeds/legacy_projects.jsonl').read_text(encoding='utf-8').splitlines() if x]
+          db=sqlite3.connect('data/catalog.sqlite')
+          db_ids={r[0] for r in db.execute('SELECT id FROM projects')}
+          seed_ids={r['project_id'] for r in rows}
+          assert len(rows)==len(db_ids)==155, (len(rows),len(db_ids))
+          assert db_ids==seed_ids, 'Stable project IDs differ from SQLite snapshot'
+          print('Recovered stable IDs:',len(rows))
+          PY
+      - name: Commit canonical reconstructed seed only
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+1998x-stack@users.noreply.github.com'
+          git add data/seeds/legacy_projects.jsonl
+          if ! git diff --cached --quiet; then
+            git commit -m 'data: recover stable seed snapshot from SQLite'
+            git push origin HEAD:main
+          fi
