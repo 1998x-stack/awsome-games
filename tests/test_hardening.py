@@ -119,4 +119,20 @@ class PublisherTests(unittest.TestCase):
         self.assertNotIn('allow-same-origin',html)
         self.assertNotIn('cdn.jsdelivr.net',js)
 
+
+class SeedIdempotenceTests(unittest.TestCase):
+    def test_missing_default_seed_does_not_double_existing_records(self):
+        from db import connect, seed_database, SEED_PATH
+        with tempfile.TemporaryDirectory() as tmp:
+            conn=connect(Path(tmp)/'test.sqlite')
+            self.assertEqual(seed_database(conn, SEED_PATH),155)
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM projects').fetchone()[0],155)
+            missing=Path(tmp)/'missing-default.jsonl'
+            with patch('db.SEED_PATH',missing):
+                self.assertEqual(seed_database(conn,missing),0)
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM projects').fetchone()[0],155)
+            with self.assertRaises(FileNotFoundError):
+                seed_database(conn,Path(tmp)/'explicit-missing.jsonl')
+            conn.close()
+
 if __name__=='__main__': unittest.main()
