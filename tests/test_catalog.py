@@ -1,5 +1,6 @@
 import json, sys, tempfile, unittest
 from pathlib import Path
+from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts'))
 from db import connect, seed_database, classify, model_version, parse_repo, infer_relation, infer_entry_path
@@ -9,7 +10,9 @@ class CatalogTests(unittest.TestCase):
     def test_seed_import_and_schema(self):
         with tempfile.TemporaryDirectory() as tmp:
             conn=connect(Path(tmp)/'catalog.sqlite')
-            n=seed_database(conn,Path(tmp)/'missing-seed.jsonl')
+            missing=Path(tmp)/'missing-seed.jsonl'
+            with patch('db.SEED_PATH', missing):
+                n=seed_database(conn,missing)
             self.assertEqual(n,155)
             self.assertEqual(conn.execute('SELECT COUNT(*) FROM projects').fetchone()[0],155)
             self.assertGreaterEqual(conn.execute('SELECT COUNT(*) FROM repositories').fetchone()[0],50)
