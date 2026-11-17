@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-11-17",
+  "historical_sheet": "2026-11-16",
+  "source_sheet": "https://docs.google.com/spreadsheets/d/1iIa0wVLh1ux-7y8VDlH9aZYsuIxpVBLz3LekmOwQtEY/edit",
+  "counts": {
+    "source_records": 1118,
+    "posts": 907,
+    "unique_x_post_ids": 906,
+    "missing_post_id": 1,
+    "works": 64,
+    "repositories": 83,
+    "claims": 12,
+    "readme_audits": 14,
+    "html_audits": 12,
+    "fable51": 9
+  },
+  "upstream": {
+    "FableList": "https://github.com/fengyiqicoder/awesome-fable-5.2/blob/main/data/works.json",
+    "VibeGamer": "https://github.com/ummydev/awesome-claude-fable-games/blob/main/data/games.json",
+    "DramaSo": "https://github.com/mofa-si/awesome-fable-5-2-videos/blob/main/data/collection.json",
+    "Sandbase": "https://github.com/sandbase-lab/awesome-fable-5-2/blob/main/data/videos.json",
+    "works64": "https://github.com/ygx2378/awesome-fable-5-2-games/blob/main/data/games.csv"
+  },
+  "files": {
+    "sources.json": {
+      "git_blob_sha": "6617600c255c5e1066bf252f28da332af3d96eac",
+      "records": 1118
+    },
+    "posts.json": {
+      "git_blob_sha": "0a9d2a5761ae446e4967f79d4ed44cdf956b0b02",
+      "records": 861
+    },
+    "entities.json": {
+      "git_blob_sha": "e26f29183cba6f26ce44093da8c21d0d8cf03130",
+      "records": 907
+    },
+    "repositories.json": {
+      "git_blob_sha": "85fe4b85f243dd6433d8eeb5f7e4762f597201af",
+      "records": 83
+    },
+    "works.json": {
+      "git_blob_sha": "d5f61b4bbe85a3d45ec6874cf7b202b9b4981aa0",
+      "records": 64
+    },
+    "claims.json": {
+      "git_blob_sha": "1febae50a56928f61628e9fd731fbe5c28622a89",
+      "records": 12
+    },
+    "readme_audits.json": {
+      "git_blob_sha": "dd22b2e4c08b24b631bbabc2dc30c2e9e08349a0",
+      "records": 14
+    },
+    "html_audits.json": {
+      "git_blob_sha": "f8eeefd0c54064899ed4e6b5f0baf2a74df6ac46",
+      "records": 12
+    },
+    "fable51.json": {
+      "git_blob_sha": "bc6de6a1105223819c810a868cde4552c5c65aa3",
+      "records": 9
+    }
+  },
+  "limits": [
+    "Source data factual metadata only; titles and URLs not third party code.",
+    "Source counts reflect different collection dates; old Google Sheets snapshot remains immutable.",
+    "Provisional entities are not verified distinct works.",
+    "Source entry paths are GitHub tree / README checks, not gameplay.",
+    "No external code redistributed in Pages unless repository approval whitelist is populated."
+  ]
+}

@@ -54,6 +54,7 @@
       <div class="card-foot"><span class="creator">${escapeHtml(p.creator||'作者未标注')}</span><div class="card-actions">
         ${hasEntry?`<button class="play-button" data-play="${escapeHtml(p.slug)}">尝试试玩 ↗</button>`:demo?`<a href="${escapeHtml(safeUrl(demo))}" target="_blank" rel="noopener noreferrer">在线演示 ↗</a>`:''}
         ${repo?`<a href="${escapeHtml(safeUrl(repo))}" target="_blank" rel="noopener noreferrer">源码 ↗</a>`:''}
+        ${(p.research_work_ids||[]).length?`<a href="./research.html?work=${encodeURIComponent(p.research_work_ids[0])}">证据 ↗</a>`:''}
       </div></div>
     </article>`;
   }
