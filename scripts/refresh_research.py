@@ -15,6 +15,7 @@ import tempfile
 from collections import Counter
 from datetime import date
 from pathlib import Path
+from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -28,8 +29,16 @@ SOURCES=(
 )
 
 def post_id(url):
-    m=re.search(r"/status/([0-9]+)",str(url or ""))
-    return m.group(1) if m else None
+    """Only X/Twitter status URLs are eligible to become post entity IDs."""
+    try:
+        p=urlsplit(str(url or ""))
+        if p.scheme not in ("https","http") or p.hostname not in (
+            "x.com","www.x.com","twitter.com","www.twitter.com"):
+            return None
+        m=re.search(r"^/[^/]+/status/([0-9]+)(?:/|$)",p.path)
+        return m.group(1) if m else None
+    except (TypeError,ValueError):
+        return None
 
 def normalize(source,x,index,source_url):
     post={"FableList":"post","VibeGamer":"post_url","DramaSo":"sourceUrl","Sandbase":"postUrl"}[source]
