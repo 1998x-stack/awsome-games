@@ -185,6 +185,10 @@ python3 scripts/collect_repositories.py --max-file-mb 80 --max-total-mb 800
 
 `entrypoint_found` 只表示找到了 HTML 文件且基本静态资源检查通过，不表示已人工验证可玩。需要构建步骤、后端或密钥的项目不会被错误标成可直接试玩。
 
+## 逐文件安全审查台账
+
+本轮实际源码审查、P0/P1 缺陷与修复核验见 [2026-11-17 逐文件审查报告](docs/AUDIT_2026-11-17.md)。请将测试通过与第三方游戏真正可玩严格区分。
+
 ## 证据审核与隔离保护
 
 第三方索引的模型声明不是事实认证。模型归属、原始 Prompt、人工参与、入口路径和实际运行结果分别记录。编辑 `config/research_reviews.json` 后执行：
