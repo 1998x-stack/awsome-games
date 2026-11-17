@@ -7,8 +7,14 @@
   const statusLabel=s=>String(s||'尚未核验').replaceAll('_',' ');
   const safeUrl=value=>{
     try {
-      const u=new URL(String(value||''));
-      return (u.protocol==='http:'||u.protocol==='https:')&&!u.username&&!u.password?u.href:'';
+      // Resolve against the document so same-origin targets stay relative under
+      // GitHub project Pages subpaths; embedded credentials stay rejected.
+      const u=new URL(String(value||''),document.baseURI);
+      if(!['http:','https:'].includes(u.protocol)||u.username||u.password)return '';
+      if(u.origin!==location.origin)return u.href;
+      const base=location.pathname.replace(/[^/]*$/,'');
+      const rest=base&&u.pathname.startsWith(base)?'./'+u.pathname.slice(base.length):u.pathname;
+      return rest+u.search;
     } catch{return '';}
   };
   const nonempty=v=>v!==undefined&&v!==null&&v!=='';

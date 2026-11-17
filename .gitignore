@@ -1,5 +1,8 @@
 __pycache__/
 *.py[cod]
+# Local virtualenvs (README instructs creating .venv)
+.venv/
+venv/
 .env
 .env.*
 !.env.example
@@ -23,3 +26,5 @@ site/build-manifest.json
 site/.nojekyll
 
 data/projects.jsonl
+# Verified pre-recreate snapshots written by `build_catalog.py --fresh`
+data/backups/

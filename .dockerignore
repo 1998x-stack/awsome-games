@@ -1,0 +1,7 @@
+.git
+.venv
+site/data
+site/games
+games
+data/catalog.sqlite*
+*.png

@@ -4,7 +4,7 @@
   const state = { all: [], visible: [], limit: 36, page: 1, data: null };
   const grid = $('project-grid');
   const escapeHtml = (s='') => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const safeUrl = (url) => { try { const u = new URL(url); return ['https:','http:'].includes(u.protocol) ? u.href : ''; } catch { return ''; } };
+  const safeUrl = (url) => { try { const u = new URL(String(url ?? ''), document.baseURI); return ['https:','http:'].includes(u.protocol) && !u.username && !u.password ? u.href : ''; } catch { return ''; } };
   // Always load published assets from the Pages site, never jsDelivr (which
   // serves HTML as text/plain), and keep the iframe in an opaque origin.
   const gameUrl = (path) => {
