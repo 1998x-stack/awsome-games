@@ -13,6 +13,8 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+ROOT = Path(__file__).resolve().parents[1]
+
 STATUSES = {"BROWSER_LOAD_CHECKED", "INCOMPLETE_OR_FAILED"}
 HEX40 = re.compile(r"^[0-9a-f]{40}$", re.I)
 HEX64 = re.compile(r"^[0-9a-f]{64}$", re.I)
@@ -31,6 +33,29 @@ def staged_entry(root: Path, entry: str) -> Path:
     return path
 
 
+def require_pinned_audit(work_id: str, repo_name: str, commit_sha: str,
+                         entry_path: str, entry_data: bytes, audit_path: Path | None) -> dict:
+    """Tie staged bytes to a reviewed Git-tree/blob identity, not a 40-hex claim.
+
+    Git SHA-1 blob hashing is retained only for identity compatibility with
+    pinned GitHub object IDs; SHA-256 remains the internal content fingerprint.
+    """
+    path = audit_path or ROOT / "data" / "research" / "audits" / (work_id + ".json")
+    if path.is_symlink() or not path.is_file():
+        raise ValueError("Pinned repository entry audit required for browser evidence import")
+    audit = json.loads(path.read_text(encoding="utf-8"))
+    expected = {"work_id":work_id, "repo":repo_name, "repository_commit_sha":commit_sha.lower(),
+                "entry_path":entry_path}
+    if any(str(audit.get(k,"")).lower()!=str(v).lower() for k,v in expected.items()):
+        raise ValueError("Pinned audit does not match repository, work, commit or entry")
+    actual_blob = hashlib.sha1(b"blob " + str(len(entry_data)).encode("ascii") + b"\\x00" + entry_data).hexdigest()
+    if audit.get("entry_git_blob_sha","").lower()!=actual_blob:
+        raise ValueError("Staged HTML Git blob does not match pinned source audit")
+    if audit.get("source_file_full_text_read") is not True:
+        raise ValueError("Pinned audit did not inspect the complete entry source")
+    return audit
+
+
 def validate_report(report: dict, entry: str) -> None:
     if not isinstance(report,dict) or report.get("status") not in STATUSES:
         raise ValueError("Invalid browser smoke report status")
@@ -46,11 +71,18 @@ def validate_report(report: dict, entry: str) -> None:
                 raise ValueError("Browser pass cannot have errors or blocked resources")
     if not isinstance(report.get("tested_at"),str) or not report["tested_at"]:
         raise ValueError("Missing test timestamp")
+    try:
+        when=datetime.fromisoformat(report["tested_at"].replace("Z","+00:00"))
+    except ValueError as exc:
+        raise ValueError("Invalid test timestamp") from exc
+    if when.tzinfo is None:
+        raise ValueError("Test timestamp needs timezone offset")
 
 
 def prepare_evidence(conn: sqlite3.Connection, *, work_id: str, commit_sha: str,
                      root: Path, report: dict, browser_version: str, environment: str,
-                     screenshot: Path | None = None) -> dict:
+                     screenshot: Path | None = None,
+                     audit_manifest: Path | None = None) -> dict:
     work=conn.execute("SELECT work_id,repository_full_name,entry_path FROM research_works WHERE work_id=?",
                       (work_id,)).fetchone()
     if not work:
@@ -64,8 +96,12 @@ def prepare_evidence(conn: sqlite3.Connection, *, work_id: str, commit_sha: str,
         raise ValueError("Browser and environment details are required")
     file=staged_entry(root,entry)
     validate_report(report,entry)
-    entry_sha=hashlib.sha256(file.read_bytes()).hexdigest()
+    data=file.read_bytes()
+    require_pinned_audit(work_id,work["repository_full_name"],commit_sha,entry,data,audit_manifest)
+    entry_sha=hashlib.sha256(data).hexdigest()
     screenshot_hash=None
+    if report["status"]=="BROWSER_LOAD_CHECKED" and screenshot is None:
+        raise ValueError("Screenshot required for passing browser load evidence")
     if screenshot is not None:
         if screenshot.is_symlink() or not screenshot.is_file():
             raise ValueError("Invalid screenshot evidence file")
@@ -103,6 +139,7 @@ def main():
     parser.add_argument("--browser-version",required=True)
     parser.add_argument("--environment",required=True,help="Container/VM name and OS; do not include secrets")
     parser.add_argument("--screenshot",type=Path)
+    parser.add_argument("--audit",type=Path,help="Pinned static entry audit; default: data/research/audits/<work-id>.json")
     parser.add_argument("--write",action="store_true",help="Explicitly persist verified metadata")
     args=parser.parse_args()
     from db import connect
@@ -112,7 +149,8 @@ def main():
     report=json.loads(args.report.read_text(encoding="utf-8"))
     evidence=prepare_evidence(conn,work_id=args.work_id,commit_sha=args.repo_commit,
         root=args.root,report=report,browser_version=args.browser_version,
-        environment=args.environment,screenshot=args.screenshot)
+        environment=args.environment,screenshot=args.screenshot,
+        audit_manifest=args.audit)
     if args.write:
         save_evidence(conn,evidence)
     print(json.dumps({"evidence_id":evidence["evidence_id"],"work_id":args.work_id,
