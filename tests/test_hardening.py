@@ -193,6 +193,28 @@ class PublisherTests(unittest.TestCase):
             self.publish(allow=True,max_size=5)
         self.assertEqual((old/'keep.html').read_text(),'old copy')
 
+    def test_metadata_write_failure_recovers_old_games_and_catalog(self):
+        site=self.base/'site'
+        previous=site/'games/_repos/example__game'
+        previous.mkdir(parents=True)
+        (previous/'keep.html').write_text('previous-version')
+        (site/'data').mkdir(exist_ok=True)
+        (site/'data/catalog.json').write_text('{"original":true}')
+        actual_replace=publisher.os.replace
+        triggered=[]
+        def break_once(source,target):
+            if str(target).endswith('data/summary.json') and not triggered:
+                triggered.append(True)
+                raise OSError('simulated metadata write failure')
+            return actual_replace(source,target)
+        with patch.object(publisher.os,'replace',side_effect=break_once):
+            with self.assertRaisesRegex(OSError,'simulated metadata'):
+                self.publish(allow=True)
+        self.assertTrue(triggered)
+        self.assertEqual((previous/'keep.html').read_text(),'previous-version')
+        self.assertFalse((previous/'index.html').exists())
+        self.assertEqual((site/'data/catalog.json').read_text(),'{"original":true}')
+
     def test_player_is_not_same_origin_with_untrusted_game(self):
         html=(ROOT/'site/index.html').read_text()
         js=(ROOT/'site/assets/app.js').read_text()
