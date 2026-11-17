@@ -157,7 +157,7 @@ def split_model_and_prompt(model_claim: str | None, prompt_field: str | None) ->
     """
     raw = str(model_claim or "").strip()
     prompt = str(prompt_field or "").strip()
-    found = re.search(r"(?i)(?:^|\\s*/\\s*)prompt (not shared|shared \\(text not in index\\))$", raw)
+    found = re.search(r"(?i)(?:^|\s*/\s*)prompt (not shared|shared \(text not in index\))$", raw)
     status = "NOT_LOCATED" if "未发现" in prompt or "未公开" in prompt else "NOT_VERIFIED"
     if found:
         status = ("INDEX_CLAIMS_SHARED_TEXT_NOT_CAPTURED" if found.group(1).lower().startswith("shared")
@@ -366,9 +366,9 @@ def export_projection(conn: sqlite3.Connection) -> dict:
     for w in works:
         w["evidence_level"]="READ_ME_REVIEWED" if w["review_level"]=="README_REVIEWED" else "COMMUNITY_INDEX_ONLY"
         w["execution_verified"]=False  # Never promote static entry detection into actual gameplay verification.
-    posts=objs("""SELECT post_key,entity_id,post_url,title,creator,category,sources,
-        kind_signal,work_id,match_status,entity_status,confidence,p.model_claim,
-        play_urls,repo_urls,pe.prompt_status AS prompt_availability
+    posts=objs("""SELECT p.post_key,p.entity_id,p.post_url,p.title,p.creator,p.category,p.sources,
+        p.kind_signal,p.work_id,p.match_status,p.entity_status,p.confidence,p.model_claim,
+        p.play_urls,p.repo_urls,pe.prompt_status AS prompt_availability
         FROM research_posts p LEFT JOIN research_post_prompt_evidence pe
         ON pe.post_key=p.post_key ORDER BY p.post_key""")
     post_reviews = {row["post_key"]: dict(row) for row in conn.execute(
