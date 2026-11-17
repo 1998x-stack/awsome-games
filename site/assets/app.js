@@ -44,7 +44,7 @@
     const hasRepo=(p.repositories||[]).length>0, hasEntry=!!p.published_game_path, hasDemo=(p.demos||[]).length>0;
     const repo=p.repositories?.[0]?.html_url || '';
     const demo=p.demos?.[0] || '';
-    const badge=hasEntry?'<span class="chip status-entry">HTML 入口已发现</span>':hasRepo?'<span class="chip status-repo">有源码仓库</span>':hasDemo?'<span class="chip status-demo">在线演示</span>':'<span class="chip">未找到源码</span>';
+    const badge=hasEntry?'<span class="chip status-entry">获准本站试玩</span>':hasRepo?'<span class="chip status-repo">有源码仓库</span>':hasDemo?'<span class="chip status-demo">在线演示</span>':'<span class="chip">未找到源码</span>';
     const model=p.model_version==='unknown'?'模型未标注':`Fable ${escapeHtml(p.model_version)}`;
     return `<article class="project-card">
       <div class="card-top"><span class="card-id">${escapeHtml(p.id)}</span><span class="model-tag">${model}</span></div>
