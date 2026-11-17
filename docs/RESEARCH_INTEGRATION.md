@@ -110,3 +110,31 @@ refresh_research.py 只下载四个指定 GitHub 索引的 JSON 元数据；绝�
 多半原帖缺乏可核对的原版源码、Prompt 全文、Agent 操作日志、token 消耗、人工修改记录。静态文件树尚未实现对所有 83 仓库的**逐行**安全审计；也没有在此环境中完成 64 个游戏的独立浏览器操作。任何将它们写作“已实际可玩”的统计都是错误的。
 
 独立 Chromium 测试方法、外部网络阻断及截图流程见 [BROWSER_SMOKE.md](BROWSER_SMOKE.md)。未经上游许可证和素材许可检查，不公开镜像游戏的可执行 HTML。
+
+## 2026-11-17：核心完整性修复
+
+**自动归并与人工审核必须隔离。** v1 的 64 项作品、83 个仓库与原帖集合是来源事实。原始 Prompt 的「未公开」「未发现公开」一律映射为 NOT_LOCATED，不因包含「公开」二字判为已发布。人类提示/编辑贡献不再复用「模型归属说明」，而是单独标注是否仅为作者自述。
+
+### 审核文件与 SQLite 审计历史
+
+`config/research_reviews.json` 是经人工确认的修正清单，可以对具体作品编号或原帖 ID 设置 APPROVED / DRAFT / REJECTED。只有状态 APPROVED 且附 HTTPS 证据链接才会覆盖网页展示字段。原始来源记录仍保留。用法：
+
+    python3 scripts/review_evidence.py --file config/research_reviews.json
+    python3 scripts/review_evidence.py --file config/research_reviews.json --apply
+    python3 scripts/build_catalog.py --check
+    python3 scripts/build_site.py
+
+每次实际变更写入 `research_review_history`，重复导入同一审核记录不会增加历史记录。未审核的占位词不能被识别成真实人工编辑量或真实生成模型运行日志。
+
+### 原子化来源更新
+
+`python3 scripts/refresh_research.py --write` 只更新来源事实，不运行 GitHub 仓库代码。完整元数据对首先写入 `data/research/current/snapshots/<sha256>/`，然后一次性替换 `current/active.json` 指针。导入器验证路径、两份 JSON 的内容哈希与采集日期一致后才允许写入 SQLite。单独存在 sources.json 或 entities.json、或者哈希不匹配时直接失败，不回退到混合历史数据。
+
+`research_source_records` 表现在严格反映当前来源快照的行数，而不是把已从上游移除的数据继续计入当前计数。旧 v1 仍作为冻结历史保留。相同 X status ID 才能归为同一原帖；同作者、同仓库或近似标题均不能证明是同一独立作品。
+
+### 发布保护
+
+新增两阶段的站点发布逻辑：仅复制经过许可批准的静态文件；排除密钥文件和非静态可执行脚本；拒绝符号链接；先计算容量；所有游戏与目录元数据准备成功后才替换线上工件。任何模拟的中途 I/O 失败都应恢复旧版本。`--preview-unapproved` 在 CI/Pages 环境直接拒绝。
+
+CI 必须在 Pages 发布前先运行全部数据完整性、归并、发布沙箱及文件回滚测试。此流程不意味着第三方游戏已经实测通过。
+
