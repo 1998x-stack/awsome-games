@@ -32,7 +32,7 @@ def post_id(url):
     """Only X/Twitter status URLs are eligible to become post entity IDs."""
     try:
         p=urlsplit(str(url or ""))
-        if p.scheme not in ("https","http") or p.hostname not in (
+        if p.username or p.password or p.scheme not in ("https","http") or p.hostname not in (
             "x.com","www.x.com","twitter.com","www.twitter.com"):
             return None
         m=re.search(r"^/[^/]+/status/([0-9]+)(?:/|$)",p.path)
