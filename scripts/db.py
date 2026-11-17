@@ -11,6 +11,12 @@ DB_PATH = ROOT / "data" / "catalog.sqlite"
 SEED_PATH = ROOT / "data" / "seeds" / "legacy_projects.jsonl"
 CATEGORY_PATH = ROOT / "config" / "categories.json"
 
+# `export_seed.py` reconstructs a seed file from a committed SQLite snapshot. It
+# records that fact as a marker, never as a citation: a reconstruction is the
+# absence of firsthand evidence, so it must never materialise as a
+# `project_evidence` row that would later look like a real source.
+SYNTHETIC_EVIDENCE_TYPES = {"sqlite_snapshot_reconstruction"}
+
 SCHEMA = r"""
 PRAGMA foreign_keys = ON;
 CREATE TABLE IF NOT EXISTS projects (
@@ -374,10 +380,13 @@ def seed_database(conn: sqlite3.Connection, seed_path: Path = SEED_PATH):
         cat_info = next((x for x in categories if x["id"] == primary_cat), categories[-1])
         creators = p.get("creators") or ([p.get("creator")] if p.get("creator") else [])
         creator = " / ".join(dict.fromkeys(x for x in creators if x))
+        per_source_evidence = p.get("evidence_by_source") or {}
+        if not isinstance(per_source_evidence, dict):
+            raise ValueError("evidence_by_source must map source URLs to provenance")
         ts = now()
         conn.execute("""INSERT INTO projects(id,slug,title,original_title,description,content_type,model_claim,model_version,model_confidence,creator,published_at,prompt_status,source_status,playable_status,created_at,updated_at)
           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-          ON CONFLICT(id) DO UPDATE SET slug=excluded.slug,title=excluded.title,original_title=excluded.original_title,description=excluded.description,content_type=excluded.content_type,model_claim=CASE WHEN projects.model_confidence='community_claim' THEN excluded.model_claim ELSE projects.model_claim END,model_version=CASE WHEN projects.model_confidence='community_claim' THEN excluded.model_version ELSE projects.model_version END,creator=excluded.creator,published_at=excluded.published_at,prompt_status=excluded.prompt_status,updated_at=excluded.updated_at""",
+          ON CONFLICT(id) DO UPDATE SET slug=excluded.slug,title=excluded.title,original_title=excluded.original_title,description=excluded.description,content_type=excluded.content_type,model_claim=CASE WHEN projects.model_confidence='community_claim' THEN excluded.model_claim ELSE projects.model_claim END,model_version=CASE WHEN projects.model_confidence='community_claim' THEN excluded.model_version ELSE projects.model_version END,creator=excluded.creator,published_at=excluded.published_at,prompt_status=excluded.prompt_status,updated_at=CASE WHEN projects.slug=excluded.slug AND projects.title=excluded.title AND projects.original_title IS excluded.original_title AND projects.description=excluded.description AND projects.content_type=excluded.content_type AND projects.creator=excluded.creator AND projects.published_at IS excluded.published_at AND projects.prompt_status=excluded.prompt_status AND projects.model_claim=CASE WHEN projects.model_confidence='community_claim' THEN excluded.model_claim ELSE projects.model_claim END AND projects.model_version=CASE WHEN projects.model_confidence='community_claim' THEN excluded.model_version ELSE projects.model_version END THEN projects.updated_at ELSE excluded.updated_at END""",
           (pid,slug,p.get("title", "Untitled"),p.get("title", "Untitled"),p.get("description", ""),cat_info["content_type"],claim,model_version(claim),"community_claim",creator,p.get("publish_date") or None,";".join(p.get("prompt_statuses",[]) or ([p.get("prompt_status")] if p.get("prompt_status") else [])) or "unknown","indexed" if p.get("repos") else "no_repository","external_demo" if p.get("plays") else "not_checked",ts,ts))
         conn.execute("DELETE FROM project_categories WHERE project_id=?", (pid,))
         for i, cat_id in enumerate(cat_ids):
@@ -387,25 +396,30 @@ def seed_database(conn: sqlite3.Connection, seed_path: Path = SEED_PATH):
             meta = parse_repo(repo_name)
             if not meta: continue
             conn.execute("""INSERT INTO repositories(full_name,owner,name,html_url,clone_url,repo_role)
-              VALUES(?,?,?,?,?,?) ON CONFLICT(full_name) DO NOTHING""", (meta["full_name"],meta["owner"],meta["name"],meta["html_url"],meta["clone_url"],infer_relation(repo_name,p.get("repo_role", ""))))
+              SELECT ?,?,?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM repositories WHERE full_name=?)""", (meta["full_name"],meta["owner"],meta["name"],meta["html_url"],meta["clone_url"],infer_relation(repo_name,p.get("repo_role", "")),meta["full_name"]))
             rid = conn.execute("SELECT id FROM repositories WHERE full_name=?", (meta["full_name"],)).fetchone()[0]
             entry = infer_entry_path(p, repo_name)
             conn.execute("""INSERT INTO project_repositories(project_id,repository_id,relation_type,is_primary,entry_path,entry_confidence)
               VALUES(?,?,?,?,?,?) ON CONFLICT(project_id,repository_id) DO UPDATE SET relation_type=excluded.relation_type,entry_path=CASE WHEN excluded.entry_path<>'' THEN excluded.entry_path ELSE project_repositories.entry_path END""",
               (pid,rid,infer_relation(repo_name,p.get("repo_role", "")),1 if repo_name==repos[0] else 0,entry,"source_link" if entry else "unresolved"))
         for url in p.get("plays", []) or ([p.get("play_url")] if p.get("play_url") else []):
-            if url: conn.execute("INSERT OR IGNORE INTO links(project_id,link_type,url,label) VALUES(?,?,?,?)",(pid,"demo",url,"在线演示"))
+            if url: conn.execute("INSERT INTO links(project_id,link_type,url,label) SELECT ?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM links WHERE project_id=? AND link_type=? AND url=?)",(pid,"demo",url,"在线演示",pid,"demo",url))
         for url in p.get("posts", []) or ([p.get("post_url")] if p.get("post_url") else []):
-            if url: conn.execute("INSERT OR IGNORE INTO links(project_id,link_type,url,label) VALUES(?,?,?,?)",(pid,"author_post",url,"作者原帖"))
+            if url: conn.execute("INSERT INTO links(project_id,link_type,url,label) SELECT ?,?,?,? WHERE NOT EXISTS(SELECT 1 FROM links WHERE project_id=? AND link_type=? AND url=?)",(pid,"author_post",url,"作者原帖",pid,"author_post",url))
         for url in p.get("prompt_urls", []) or ([p.get("prompt_url")] if p.get("prompt_url") else []):
-            if url: conn.execute("INSERT OR IGNORE INTO prompts(project_id,status,prompt_url) VALUES(?,?,?)",(pid,"published",url))
+            if url: conn.execute("INSERT INTO prompts(project_id,status,prompt_url) SELECT ?,?,? WHERE NOT EXISTS(SELECT 1 FROM prompts WHERE project_id=? AND prompt_url=?)",(pid,"published",url,pid,url))
         for url in p.get("sources", []) or ([p.get("source_url")] if p.get("source_url") else []):
             if not url: continue
             name = urlparse(url).netloc or "unknown source"
-            conn.execute("INSERT OR IGNORE INTO evidence_sources(name,source_type,url) VALUES(?,?,?)",(name,"community_index",url))
+            conn.execute("INSERT INTO evidence_sources(name,source_type,url) SELECT ?,?,? WHERE NOT EXISTS(SELECT 1 FROM evidence_sources WHERE url=?)",(name,"community_index",url,url))
             sid = conn.execute("SELECT id FROM evidence_sources WHERE url=?",(url,)).fetchone()[0]
-            ev_type = (p.get("evidence") or [p.get("evidence_kind", "community_index")])[0]
-            confidence = "medium" if ev_type in ("repository_documentation", "repository_name_and_files") else "low"
+            # Prefer faithful per-source provenance from the seed; the project-level
+            # `evidence` list is only a fallback for hand-authored seeds.
+            mapping = per_source_evidence.get(url) or {}
+            ev_type = mapping.get("evidence_type") or (p.get("evidence") or [p.get("evidence_kind", "community_index")])[0]
+            if ev_type in SYNTHETIC_EVIDENCE_TYPES:
+                continue
+            confidence = mapping.get("confidence") or ("medium" if ev_type in ("repository_documentation", "repository_name_and_files") else "low")
             conn.execute("INSERT OR IGNORE INTO project_evidence(project_id,evidence_source_id,evidence_type,confidence,observed_at) VALUES(?,?,?,?,?)",(pid,sid,ev_type,confidence,ts))
         count += 1
     conn.commit()

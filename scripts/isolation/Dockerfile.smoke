@@ -1,0 +1,42 @@
+# Disposable, network-isolated Chromium runner for M3 browser smoke tests.
+#
+# Preferred entry point: scripts/isolation/run_isolated_smoke.sh, which wraps the
+# run with the strict flags below and copies artifacts out of a named volume.
+#
+# Build (network allowed here, only to fetch pinned tooling + browser):
+#   docker build -f scripts/isolation/Dockerfile.smoke -t awsome-games-smoke .
+#
+# Run (network disabled at the OS level; this is the actual isolation boundary):
+#   bash scripts/isolation/run_isolated_smoke.sh \
+#     --root .cache/isolated-stage --entry demos/04-fps/index.html --out .cache/iso-reports
+#
+# The browser-level route guards in scripts/browser_smoke.py are a second line of
+# defence only. The OS-level --network none is the boundary that actually
+# prevents WebRTC/UDP/DNS egress, which Playwright routing cannot intercept.
+FROM python:3.12-slim-bookworm
+
+# Pinned to the same Playwright release the project scripts are validated against.
+ARG PLAYWRIGHT_VERSION=1.65.2
+
+ENV PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
+    PYTHONDONTWRITEBYTECODE=1
+
+# libatomic1 is required by the bundled Node driver before --with-deps can run.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libatomic1 \
+ && pip install "playwright==${PLAYWRIGHT_VERSION}" \
+ && playwright install --with-deps chromium \
+ && rm -rf /root/.cache /var/lib/apt/lists/*
+
+# No collector source is baked in. The staged artifact is mounted read-only at
+# run time so a compromised page can never mutate the evidence it came from.
+WORKDIR /work
+COPY scripts/browser_smoke.py scripts/browser_fixture_probe.py /work/
+
+# Arbitrary non-root uid mapping is expected (--user), so keep /tmp world-writable.
+RUN mkdir -p /reports && chmod 1777 /tmp /reports
+
+ENTRYPOINT ["python3"]
+CMD ["/work/browser_fixture_probe.py"]

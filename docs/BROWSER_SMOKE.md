@@ -40,5 +40,26 @@
 
 **重要：** Playwright 的网络路由不是操作系统防火墙，无法严格证明所有 WebRTC/UDP、浏览器内部网络功能都无法访问外网。真正运行不可信第三方程序时，应在无出站网络权限的 disposable VM/网络命名空间内进行，并确保没有主机文件挂载、登录 Cookie、密钥或本机服务。单凭 iframe sandbox 不足以承诺恶意代码 100% 安全。
 
-官方接口：https://playwright.dev/python/docs/api/class-browsercontext#browser-context-route-web-socket
+Official API: https://playwright.dev/python/docs/api/class-browsercontext#browser-context-route-web-socket
+
+
+## 已实现的 OS 级隔离执行器（2026-11-17）
+
+浏览器层路由只是第二道防线，无法阻断 WebRTC/UDP/DNS。真正的边界由容器网络命名空间提供：
+
+    # 一次性构建（此步骤需要网络，仅用于获取固定版本的工具与浏览器）
+    docker build -f scripts/isolation/Dockerfile.smoke -t awsome-games-smoke .
+
+    # 在 --network none 下运行（不建议把待测目录放在 /private/tmp，macOS 的 Docker VM 可能看不到）
+    bash scripts/isolation/run_isolated_smoke.sh \
+      --root .cache/isolated-stage --entry demos/04-fps/index.html --out .cache/iso-reports \
+      --screenshot smoke.png \
+      --browser-version 'chromium-headless-shell <实际版本>' \
+      --environment 'docker --network none / python:3.12-slim-bookworm / uid 65534'
+
+该包装脚本强制执行：`--network none`、只读根文件系统、只读挂载被审查目录（挂载点不可写，页面无法篡改其来源证据）、`--cap-drop ALL`、`no-new-privileges`、`--pids-limit 256`、内存/CPU 上限、以 uid 65534 运行、`/reports` 使用命名卷（macOS 绑定挂载不遵循容器 uid）。脚本在启动前还会预检容器是否真的能看到目标入口，避免“挂载为空”被误读成测试失败。
+
+**已验证范围：** 2026-11-17 在本仓库自编写的无害 fixture（`.cache/isolated-stage`，非第三方代码）上跑通，得到 `BROWSER_LOAD_CHECKED`、`iframe_isolation: true`、无控制台错误、无阻断请求，并保存截图。**第三方游戏仍未在此隔离环境中执行：保持 `NOT_TESTED`。**
+
+自报浏览器报告无法被冒用：`scripts/import_browser_report.py` 只接受与 `research_works.entry_path`（已人工审阅的入口）完全一致的 staged 文件，并锁定 40 位 commit SHA。用自编 fixture 去冒领真实 work_id 会被拒绝，`research_runtime_evidence` 保持 0 行。
 

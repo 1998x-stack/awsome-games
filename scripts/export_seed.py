@@ -7,7 +7,7 @@ import argparse
 import json
 import sqlite3
 from pathlib import Path
-from db import ROOT
+from db import ROOT, SYNTHETIC_EVIDENCE_TYPES
 
 
 def export_seed(database: Path, destination: Path) -> int:
@@ -21,10 +21,13 @@ def export_seed(database: Path, destination: Path) -> int:
               JOIN repositories r ON r.id=pr.repository_id WHERE pr.project_id=?
               ORDER BY pr.is_primary DESC, r.full_name""", (project_id,)).fetchall()
         links = conn.execute('SELECT link_type,url FROM links WHERE project_id=? ORDER BY link_type,url', (project_id,)).fetchall()
-        evidence = conn.execute("""SELECT e.url FROM project_evidence pe JOIN evidence_sources e
-              ON pe.evidence_source_id=e.id WHERE pe.project_id=? ORDER BY e.url""", (project_id,)).fetchall()
+        evidence = conn.execute("""SELECT e.url, pe.evidence_type, pe.confidence FROM project_evidence pe
+              JOIN evidence_sources e ON pe.evidence_source_id=e.id WHERE pe.project_id=?
+              ORDER BY e.url, pe.evidence_type""", (project_id,)).fetchall()
+        # A reconstruction marker is not a citation; never let it look like one.
+        evidence = [x for x in evidence if x['evidence_type'] not in SYNTHETIC_EVIDENCE_TYPES]
         prompts = conn.execute("SELECT prompt_url FROM prompts WHERE project_id=? AND prompt_url<>'' ORDER BY prompt_url", (project_id,)).fetchall()
-        srcs = [x['url'] for x in evidence]
+        srcs = sorted({x['url'] for x in evidence})
         plays = [x['url'] for x in links if x['link_type']=='demo']
         posts = [x['url'] for x in links if x['link_type']=='author_post']
         result.append({
@@ -36,7 +39,9 @@ def export_seed(database: Path, destination: Path) -> int:
             'plays': plays, 'posts': posts, 'sources': srcs,
             'prompt_urls': [x['prompt_url'] for x in prompts],
             'prompt_status': p['prompt_status'] or '',
-            'evidence': ['sqlite_snapshot_reconstruction'],
+            'evidence': sorted({x['evidence_type'] for x in evidence}),
+            'evidence_by_source': {x['url']: {'evidence_type': x['evidence_type'],
+                                             'confidence': x['confidence']} for x in evidence},
             '_reconstruction_origin': 'data/catalog.sqlite',
         })
     conn.close()

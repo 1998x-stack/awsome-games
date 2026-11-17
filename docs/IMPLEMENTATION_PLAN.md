@@ -1,0 +1,152 @@
+# 实施计划与里程碑进度
+
+**基线 SHA：** `ebab78e8f558abb37f7d02ff458c2edef1607801`
+**分支：** `feat/pi-agent-baseline-hardening-20261117`
+**更新日期：** 2026-11-17
+**状态图例：** `VERIFIED`（真实执行并有证据）/ `IMPLEMENTED_NOT_VERIFIED`（代码落地未实测）/
+`BLOCKED`（客观阻塞）/ `NOT_STARTED`
+
+本次迭代范围：先完成一个**可复核的小闭环**——本地完整部署 + 真实缺陷修复 + 隔离能力落地，
+把大规模数据归并和第三方实测留到下一批，并量化剩余工作。
+
+---
+
+## 批次 1：本地部署、基线与 P0/P1 缺陷修复 — `VERIFIED`
+
+**验收标准：** 全部质量门禁绿；每个修复都有先失败的回归测试；权威数据库稳定 ID 与主表数量未意外变化。
+
+| 交付物 | 文件 | 验证 |
+|---|---|---|
+| 本地基线报告 | `docs/LOCAL_BASELINE_2026-11-17.md` | 所有数字附 SQL/命令 |
+| 跨页溯源链接修复 | `site/assets/{review,research,app}.js` | `tests/test_site_e2e.py`、`tests/test_site_link_policy.py` |
+| 幂等导入（行号序列 + 时间戳） | `scripts/db.py` | `tests/test_hardening.py::SeedReproducibilityTests` |
+| 证据来源往返保真 | `scripts/export_seed.py`、`scripts/db.py`、`data/seeds/legacy_projects.jsonl` | `tests/test_seed_provenance.py` |
+| `--fresh` 删库前备份 | `scripts/build_catalog.py` | `tests/test_hardening.py::FreshRecreateSafetyTests` |
+| 静态页面去除硬编码统计 | `site/index.html`、`site/research.html` | `tests/test_site_link_policy.py` |
+| OS 级隔离执行器 | `scripts/isolation/{Dockerfile.smoke,run_isolated_smoke.sh}`、`.dockerignore` | `tests/test_isolation_harness.py` + 真实 `docker run --network none` |
+| 文档与流程 | `AGENTS.md`、`docs/BROWSER_SMOKE.md`、`.github/workflows/validate.yml` | CI 等价命令本地全绿 |
+
+**门禁结果：** 75 个单元测试通过（起始 56）；`build_catalog --check` / `check_catalog` /
+`build_site` / `node --check` ×3 / `bash -n` 全部 exit 0。
+
+---
+
+## M1：实体归并与数据一致性 — `部分完成`
+
+### 已完成
+
+* **证据语义分离**：`research_posts.model_claim` 与
+  `research_post_prompt_evidence.prompt_status` 分离（`NOT_LOCATED` 440、
+  `INDEX_REPORTS_NOT_SHARED` 330、`INDEX_CLAIMS_SHARED_TEXT_NOT_CAPTURED` 70、`NOT_VERIFIED` 67）。
+* **精确归并原则**：`research_project_links` 只用 `EXACT_REPO_AND_TITLE`，63 条；同名不自动归并。
+* **冻结快照不可变**：`data/research/v1/*.json` 不被增量写回；来源快照两文件原子切换并校验 SHA-256。
+* **人工审核独立层**：`research_work_reviews` / `research_post_reviews` / `research_review_history`
+  独立于来源导入；重新导入不覆盖审核结论。
+* **本轮新增**：修复"重建种子会伪造证据行"的缺陷——`project_evidence` 从 155 稳定在 155（此前
+  每次重建翻倍到 310），且真实 `evidence_type`/`confidence` 可无损往返。
+* **本轮新增**：修复幂等导入不幂等（`sqlite_sequence` 单调增长、`updated_at` 抖动）。
+
+### 未完成
+
+* **904 条未归并原帖**的逐条一手证据审核（当前 907 中仅 3 条有 work 关联，63 条旧库精确映射）。
+* `config/work_aliases.json` 的 `Last Return` / `Last Return（原 No Return）` 仍是 `CANDIDATE`。
+* 别名、镜像、复刻、同作者多作品的多对多关系建模仍不完整。
+* SQLite 二进制不可逐字节复现（逻辑内容已稳定）。
+
+**下一步：** 为 907 条原帖建立分批审核工单（按 `kind_signal`、`match_status` 分层），
+只允许带 HTTPS 一手证据的 `APPROVED` 条目升级；为每条 Post→Work 关系补充证据片段、抓取时间、审核人、冲突与回滚历史。
+
+---
+
+## M2：83 个候选仓库准入与代码级审计 — `NOT_STARTED`（仅路由）
+
+### 已完成
+
+* 83 个候选全部进入 `build_queue()`，其中 `research_only_repository_candidates` = 32（不在旧采集器内）。
+* 分类仅作**审查路由**：`BROWSER_CANDIDATE_UNREVIEWED`、`MIRROR_NEEDS_ATTRIBUTION`、
+  `NON_BROWSER_REVIEW`、`PR_OR_COMPONENT`、`RELATED_TOOL_OR_DIFFERENT_WORK`、`MIXED_MODEL_REVIEW`。
+* `/review.html` 只读展示路由与原始证据链接。
+
+### 未完成
+
+* 83 个仓库**没有任何一个**完成逐行源码/依赖/许可证审计（当前仅为文件树 + 部分 README）。
+* 未产出 `data/research/audits/*.json` 与 `docs/audits/*.md` 机读审计摘要。
+
+**下一步（建议顺序）：** 先对已有 11 个已审静态入口的仓库做完整审计（固定 commit SHA、
+外部请求清单、构建条件、许可证、镜像关系、风险），再按 `BROWSER_CANDIDATE_UNREVIEWED` 有序扩展。
+
+---
+
+## M3：隔离运行与结果回写 — `能力 VERIFIED / 第三方实测 NOT_TESTED`
+
+### 已完成（本轮实质推进）
+
+* **真正的 OS 级隔离执行器**：`scripts/isolation/Dockerfile.smoke` +
+  `scripts/isolation/run_isolated_smoke.sh`。强制 `--network none`、只读根文件系统、
+  **被审目录只读挂载**（页面无法篡改自身来源证据）、`--cap-drop ALL`、
+  `no-new-privileges`、`--pids-limit`、内存/CPU 上限、非 root（uid 65534）、命名卷收报告。
+* **启动前预检**：容器看不到入口时给出可执行提示，避免"空挂载"被误读为测试失败。
+* **真实执行**：自编写无害 fixture 在 `--network none` 下得到 `BROWSER_LOAD_CHECKED`、
+  `iframe_isolation: true`、无控制台错误、无阻断请求，并保存截图。
+* **fail-closed 验证**：自编 fixture 无法冒充真实 `work_id` 导入，`research_runtime_evidence` 保持 0 行。
+* 导入器仍要求 40 位 commit SHA、入口与已审 `entry_path` 一致、内容寻址 `evidence_id`、重复导入幂等。
+
+### 未完成 / 阻塞
+
+* **第三方游戏实测 0 个**（`NOT_TESTED`）：本地没有第三方源码快照；运行第三方程序属需人工确认的动作。
+* 未实现"每个游戏真实交互预期"的行为断言（点击/键盘/触控）；因此无人能拿到 `GAMEPLAY_VERIFIED`。
+* WebRTC/UDP/WebGPU 的浏览器兼容性矩阵未测。
+
+**下一步：** 在任何第三方运行前取得人工确认；确认后在隔离执行器中按
+`--root <staged> --entry <已审入口>` 运行，并逐游戏补充交互断言。
+
+---
+
+## M4：增量发现、审核与 CI/CD — `部分完成`
+
+### 已完成
+
+* `.github/workflows/research-sync.yml` 每日 UTC 03:17 只读漂移检查，不写回 main、不克隆、不部署。
+* 来源缩减触发失败并保留运行制品。
+* CI 门禁：`validate.yml` 现在包含 `compileall`、全套单测、三个前端 `node --check`、
+  `bash -n scripts/*.sh scripts/isolation/*.sh bootstrap.sh`、`check_catalog`、`build_site`。
+
+### 未完成
+
+* 4 个结构化上游之外，`data/sources.json` 列出的更多来源未接入 `SourceAdapter`。
+* 无定期 PR 提案、无审查签核、无链接有效性持续监测、无数据迁移框架。
+* 未扩充故障注入/XSS/CSV 公式注入/路径遍历/symlink 的**端到端**回归（部分已有）。
+
+**下一步：** 建立 `SourceAdapter` 抽象与数据版本表；增加仅元数据的自动化 PR 提案；
+补充 CSV/路径/symlink 的端到端安全回归。
+
+---
+
+## M5：统一研究网站与审核工作台 — `部分完成`
+
+### 已完成
+
+* 三个页面（目录 / Evidence Lab / Review Queue）真实加载，**0 page error、0 console error**。
+* `/review.html` 严格 `textContent`、无 `innerHTML`、`noopener noreferrer`、`referrerPolicy`。
+* 独立状态分离：来源收录 / 入口已定位 / 浏览器加载 / 实际交互 / 发布授权 分别呈现，无"可玩"单一标签。
+* 空结果与加载失败提示、加载更多、按类型/状态筛选与 CSV 导出（含公式注入转义）。
+* **本轮修复**：Review Queue → Evidence Lab 的溯源跳转此前渲染为死链 `<span>`，现已可用且保持相对路径。
+
+### 未完成
+
+* 无全设备视觉验收截图证据。
+* 无跨原帖的多对多实体导航图；Review Queue 无 CSV 导出。
+* 无真正的交互式审核后台（当前只读，写入走 `config/research_reviews.json` + CLI）。
+
+**下一步：** 增加移动端/键盘可达性 E2E 与截图归档；为 Review Queue 增加导出；
+实现 Post↔Work↔Repository↔Audit↔Runtime 的双向可点击导航。
+
+---
+
+## 剩余工作的优先级建议
+
+1. **M2 的 11 个已审入口仓库完整审计**（可复核、不涉及运行第三方代码）。
+2. **M1 的分批原帖审核工单**（把 907 条量化到可执行的批次）。
+3. **M5 的移动端/无障碍 E2E 与截图证据**。
+4. **M4 的 `SourceAdapter` + 元数据 PR 提案**。
+5. **M3 第三方实测**——仅在取得人工确认后。

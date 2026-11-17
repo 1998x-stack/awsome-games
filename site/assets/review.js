@@ -5,7 +5,21 @@
   const kinds=['repositories','posts','works','alias_candidates'];
   const label={repositories:'仓库候选',posts:'原帖线索',works:'工程作品',alias_candidates:'别名候选'};
   const elt=(tag,txt,cls)=>{const n=document.createElement(tag);n.textContent=String(txt??'');if(cls)n.className=cls;return n};
-  const safeUrl=value=>{try{const url=new URL(value);return ['https:','http:'].includes(url.protocol)&&!url.username&&!url.password?url.href:''}catch{return ''}};
+  // Resolve against the current document so same-origin cross-navigation (the
+  // Evidence Lab link) actually renders as an anchor, while still rejecting
+  // javascript:/data:, embedded credentials and other unsafe schemes.
+  const safeUrl=value=>{
+    try{
+      const url=new URL(String(value??''),document.baseURI);
+      if(!['https:','http:'].includes(url.protocol)||url.username||url.password)return '';
+      if(url.origin!==location.origin)return url.href;
+      // Keep same-origin targets relative so GitHub project Pages subpaths
+      // (https://<user>.github.io/<repo>/) keep working.
+      const base=location.pathname.replace(/[^/]*$/,'');
+      const rest=base&&url.pathname.startsWith(base)?'./'+url.pathname.slice(base.length):url.pathname;
+      return rest+url.search;
+    }catch{return ''}
+  };
   const rowInfo=(kind,r)=>{
     if(kind==='repositories')return {id:r.full_name,title:r.display_title||r.full_name,
       status:r.queue_kind,detail:r.tech||'无技术信息',action:r.next_action,

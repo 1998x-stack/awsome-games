@@ -238,4 +238,85 @@ class SeedIdempotenceTests(unittest.TestCase):
                 seed_database(conn,Path(tmp)/'explicit-missing.jsonl')
             conn.close()
 
+class FreshRecreateSafetyTests(unittest.TestCase):
+    """`--fresh` must never destroy the authoritative SQLite without a verified copy."""
+
+    def test_backup_is_verified_and_restorable(self):
+        import sqlite3
+        import build_catalog
+        from db import connect
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'catalog.sqlite'
+            conn=connect(path)
+            conn.execute("INSERT INTO projects(id,slug,title,created_at,updated_at) "
+                         "VALUES('p','p','Sample','2026-01-01T00:00:00+00:00','2026-01-01T00:00:00+00:00')")
+            conn.commit(); conn.close()
+            backup=build_catalog.backup_database(path)
+            self.assertTrue(backup.is_file())
+            self.assertEqual(backup.parent.name,'backups')
+            restored=sqlite3.connect(backup)
+            try:
+                self.assertEqual(restored.execute('SELECT COUNT(*) FROM projects').fetchone()[0],1)
+                self.assertEqual(restored.execute('PRAGMA integrity_check').fetchone()[0],'ok')
+            finally:
+                restored.close()
+            self.assertIsNone(build_catalog.backup_database(Path(tmp)/'absent.sqlite'))
+
+    def test_recreate_backs_up_before_unlinking(self):
+        """Ordering guard: the deletion must come after the backup call."""
+        import build_catalog
+        source=Path(build_catalog.__file__).read_text(encoding='utf-8')
+        backup_at=source.index('backup = backup_database(DB_PATH)')
+        unlink_at=source.index('DB_PATH.unlink()')
+        self.assertLess(backup_at,unlink_at)
+        self.assertIn('refusing to recreate',source)
+
+
+class SeedReproducibilityTests(unittest.TestCase):
+    """Idempotent import must not rewrite timestamps or burn autoincrement rowids."""
+
+    def _seed(self, conn, stamp):
+        import db
+        with patch.object(db, 'now', return_value=stamp):
+            return db.seed_database(conn, db.SEED_PATH)
+
+    def test_reimport_does_not_churn_sequences_or_timestamps(self):
+        import db
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = db.connect(Path(tmp) / 'repro.sqlite')
+            self.assertEqual(self._seed(conn, '2026-01-01T00:00:00+00:00'), 155)
+            def snapshot():
+                return (
+                    dict(conn.execute('SELECT name, seq FROM sqlite_sequence')),
+                    {r[0] for r in conn.execute('SELECT updated_at FROM projects')},
+                    {t: conn.execute(f'SELECT COUNT(*) FROM {t}').fetchone()[0]
+                     for t in ('projects', 'repositories', 'links', 'prompts', 'evidence_sources')},
+                )
+            before = snapshot()
+            self.assertEqual(before[1], {'2026-01-01T00:00:00+00:00'})
+            self.assertEqual(self._seed(conn, '2026-02-02T00:00:00+00:00'), 155)
+            self.assertEqual(snapshot(), before,
+                             're-import changed timestamps, rowid sequences or row counts')
+            conn.close()
+
+    def test_guarded_inserts_still_create_missing_rows(self):
+        """The WHERE NOT EXISTS guards must still insert genuinely new rows."""
+        import db
+        with tempfile.TemporaryDirectory() as tmp:
+            conn = db.connect(Path(tmp) / 'restore.sqlite')
+            self._seed(conn, '2026-01-01T00:00:00+00:00')
+            conn.execute('DELETE FROM links WHERE link_type=\'demo\'')
+            conn.execute('DELETE FROM evidence_sources WHERE url IN (SELECT url FROM evidence_sources LIMIT 5)')
+            conn.execute('DELETE FROM repositories')
+            conn.commit()
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM repositories').fetchone()[0], 0)
+            self.assertEqual(self._seed(conn, '2026-01-01T00:00:00+00:00'), 155)
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM repositories').fetchone()[0], 54)
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM links WHERE link_type='demo'").fetchone()[0], 59)
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM evidence_sources').fetchone()[0], 81)
+            # Every project-repository mapping must be resolvable again.
+            self.assertEqual(conn.execute('SELECT COUNT(*) FROM project_repositories').fetchone()[0], 150)
+            conn.close()
+
+
 if __name__=='__main__': unittest.main()

@@ -2,9 +2,40 @@
 """Import the reviewed seed snapshot into SQLite and export machine-readable catalog files."""
 from __future__ import annotations
 import argparse, csv, json, sqlite3, sys
+from datetime import datetime, timezone
 from pathlib import Path
 from db import ROOT, DB_PATH, connect, seed_database, now
 from research_pipeline import ingest as ingest_research, project_links
+
+
+def backup_database(path: Path = DB_PATH):
+    """Copy the authoritative SQLite to a verified snapshot before destroying it.
+
+    `--fresh` drops locally collected clone metadata and any curated rows that
+    are not reproducible from the checked-in seeds. Never do that without a
+    recoverable, integrity-checked copy of the current database.
+    """
+    if not path.exists():
+        return None
+    backup_dir = path.parent / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    target = backup_dir / f"{path.stem}-{stamp}{path.suffix}"
+    source = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    destination = sqlite3.connect(target)
+    try:
+        # sqlite backup API is WAL-safe; a plain file copy is not.
+        source.backup(destination)
+    finally:
+        destination.close()
+        source.close()
+    probe = sqlite3.connect(target)
+    try:
+        if probe.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+            raise RuntimeError("Fresh-database backup failed integrity check; refusing to recreate")
+    finally:
+        probe.close()
+    return target
 
 
 def export_catalog(conn):
@@ -84,6 +115,8 @@ def main():
     ap.add_argument('--fresh',action='store_true',help='Recreate the SQLite database from seed; removes local clone metadata')
     args=ap.parse_args()
     if args.fresh and DB_PATH.exists():
+        backup = backup_database(DB_PATH)
+        print(json.dumps({"fresh_backup": str(backup)}, ensure_ascii=False))
         DB_PATH.unlink()
         for ext in ('-wal','-shm'):
             Path(str(DB_PATH)+ext).unlink(missing_ok=True)
