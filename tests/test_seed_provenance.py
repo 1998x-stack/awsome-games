@@ -44,6 +44,42 @@ class SeedProvenanceRoundTripTests(unittest.TestCase):
             first.close()
             second.close()
 
+    def test_multiple_evidence_types_same_source_round_trip(self):
+        """A source URL is not a unique evidence claim; keep both true types."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)
+            seed = path / 'multi.jsonl'
+            url = 'https://github.com/owner/original-work'
+            seed.write_text(json.dumps({
+                'project_id':'fab_multi', 'title':'Multiple provenance',
+                'repos':[], 'sources':[url],
+                'evidence_by_source': {url:[
+                    {'evidence_type':'repository_documentation','confidence':'medium'},
+                    {'evidence_type':'author_original_statement','confidence':'high'},
+                    {'evidence_type':'sqlite_snapshot_reconstruction','confidence':'low'},
+                ]},
+            })+'\n',encoding='utf-8')
+            first=db_module.connect(path/'first.sqlite')
+            self.assertEqual(db_module.seed_database(first,seed),1)
+            def snapshot(c):
+                return [(r['evidence_type'],r['confidence']) for r in
+                        c.execute("""SELECT pe.evidence_type,pe.confidence FROM project_evidence pe
+                         JOIN evidence_sources e ON e.id=pe.evidence_source_id
+                         WHERE e.url=? ORDER BY pe.evidence_type""",(url,))]
+            self.assertEqual(snapshot(first),[
+                ('author_original_statement','high'),
+                ('repository_documentation','medium')])
+            exported=path/'export.jsonl'
+            self.assertEqual(export_seed.export_seed(path/'first.sqlite',exported),1)
+            data=json.loads(exported.read_text(encoding='utf-8'))
+            self.assertEqual(len(data['evidence_by_source'][url]),2)
+            second=db_module.connect(path/'second.sqlite')
+            self.assertEqual(db_module.seed_database(second,exported),1)
+            self.assertEqual(snapshot(first),snapshot(second))
+            self.assertEqual(db_module.seed_database(second,exported),1)
+            self.assertEqual(len(snapshot(second)),2)
+            first.close();second.close()
+
     def test_reconstruction_marker_never_becomes_a_citation(self):
         with tempfile.TemporaryDirectory() as tmp:
             seed = Path(tmp) / 'marker.jsonl'

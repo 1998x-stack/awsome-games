@@ -299,6 +299,35 @@ class SeedReproducibilityTests(unittest.TestCase):
                              're-import changed timestamps, rowid sequences or row counts')
             conn.close()
 
+    def test_category_only_change_updates_timestamp_once(self):
+        """A different category with same content_type still bumps updated_at."""
+        import db
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'seed.jsonl'
+            row={'project_id':'fab_category_test','title':'Test','category':'puzzle',
+                 'model':'unknown','sources':[]}
+            path.write_text(json.dumps(row)+'\n',encoding='utf-8')
+            conn=db.connect(Path(tmp)/'test.sqlite')
+            with patch.object(db,'now',return_value='2026-01-01T00:00:00+00:00'):
+                db.seed_database(conn,path)
+            first=conn.execute("SELECT updated_at,content_type FROM projects WHERE id=?",
+                               ('fab_category_test',)).fetchone()
+            self.assertEqual(first['content_type'],'game')
+            row['category']='racing'
+            path.write_text(json.dumps(row)+'\n',encoding='utf-8')
+            with patch.object(db,'now',return_value='2026-02-02T00:00:00+00:00'):
+                db.seed_database(conn,path)
+            second=conn.execute("SELECT updated_at,content_type FROM projects WHERE id=?",
+                                ('fab_category_test',)).fetchone()
+            self.assertEqual(second['content_type'],first['content_type'])
+            self.assertNotEqual(second['updated_at'],first['updated_at'])
+            with patch.object(db,'now',return_value='2026-03-03T00:00:00+00:00'):
+                db.seed_database(conn,path)
+            self.assertEqual(conn.execute("SELECT updated_at FROM projects WHERE id=?",
+                                          ('fab_category_test',)).fetchone()[0],second['updated_at'])
+            conn.close()
+
     def test_guarded_inserts_still_create_missing_rows(self):
         """The WHERE NOT EXISTS guards must still insert genuinely new rows."""
         import db
