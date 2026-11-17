@@ -1,5 +1,7 @@
 """Regression tests: research evidence is additive, idempotent, and never confuses entry with gameplay."""
 import json
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -82,6 +84,17 @@ class ResearchIntegrationTests(unittest.TestCase):
             WHERE lower(r.full_name)=lower(w.repository_full_name)""").fetchall()
         self.assertTrue(links)
         self.assertTrue(all(x["title"].casefold().strip()==x["work_title"].casefold().strip() for x in links))
+
+    @unittest.skipUnless(shutil.which("node"), "Node.js is needed for JS syntax check")
+    def test_research_page_js_syntax_and_untrusted_text_policy(self):
+        result=subprocess.run(["node","--check",str(ROOT/'site/assets/research.js')],capture_output=True,text=True)
+        self.assertEqual(result.returncode,0,result.stderr)
+        js=(ROOT/'site/assets/research.js').read_text()
+        self.assertIn("textContent",js)
+        self.assertNotIn("innerHTML",js)
+        self.assertIn("rel='noopener noreferrer'",js)
+        html=(ROOT/'site/research.html').read_text()
+        self.assertIn('script src="./assets/research.js"',html)
 
     def test_urls_and_paths_reject_unsafe_input(self):
         self.assertEqual(repo_key("https://github.com/Owner/Game/pull/7"),"owner/game")
