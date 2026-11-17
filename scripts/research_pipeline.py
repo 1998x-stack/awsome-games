@@ -41,6 +41,13 @@ CREATE TABLE IF NOT EXISTS research_posts (
  play_urls TEXT, repo_urls TEXT,
  FOREIGN KEY(work_id) REFERENCES research_works(work_id)
 );
+CREATE TABLE IF NOT EXISTS research_post_prompt_evidence (
+ post_key TEXT PRIMARY KEY REFERENCES research_posts(post_key) ON DELETE CASCADE,
+ prompt_status TEXT NOT NULL,
+ raw_model_field TEXT,
+ raw_prompt_field TEXT,
+ evidence_scope TEXT NOT NULL DEFAULT 'SOURCE_METADATA_ONLY'
+);
 CREATE TABLE IF NOT EXISTS research_source_records (
  source TEXT NOT NULL, source_id TEXT NOT NULL, post_id TEXT,
  post_url TEXT, title TEXT, category TEXT, author TEXT,
@@ -142,6 +149,25 @@ def classify_prompt_evidence(value: str) -> str:
     return "NOT_VERIFIED"
 
 
+def split_model_and_prompt(model_claim: str | None, prompt_field: str | None) -> tuple[str | None, str]:
+    """Never treat 'prompt shared/not shared' as a model name.
+
+    Original upstream text stays in research_post_prompt_evidence for traceability.
+    An index claiming to share prompts does not prove the full prompt was inspected.
+    """
+    raw = str(model_claim or "").strip()
+    prompt = str(prompt_field or "").strip()
+    found = re.search(r"(?i)(?:^|\\s*/\\s*)prompt (not shared|shared \\(text not in index\\))$", raw)
+    status = "NOT_LOCATED" if "未发现" in prompt or "未公开" in prompt else "NOT_VERIFIED"
+    if found:
+        status = ("INDEX_CLAIMS_SHARED_TEXT_NOT_CAPTURED" if found.group(1).lower().startswith("shared")
+                  else "INDEX_REPORTS_NOT_SHARED")
+        raw = raw[:found.start()].strip(" /")
+    if raw.casefold() in ("not checked", "unknown", "none", "n/a"):
+        raw = ""
+    return raw or None, status
+
+
 def reviewed_human_role(repository: str, title: str) -> tuple[str, str]:
     """Explicit public self-reports only; never infer human working hours."""
     repo = repository.casefold()
@@ -234,6 +260,7 @@ def ingest(conn: sqlite3.Connection) -> dict:
                 work_id = None
             play = [u for u in (r.get("play_urls") or []) if valid_url(u)]
             rr = [u for u in (r.get("repository_urls") or []) if valid_url(u)]
+            clean_model, post_prompt_status = split_model_and_prompt(r.get("model_claim"),r.get("prompt_evidence"))
             conn.execute("""INSERT INTO research_posts
                 (post_key,entity_id,post_url,title,creator,category,sources,kind_signal,
                  work_id,match_status,match_method,entity_status,confidence,model_claim,
@@ -249,8 +276,15 @@ def ingest(conn: sqlite3.Connection) -> dict:
                 (key,r.get("entity_id"),valid_url(r.get("post_url")),r.get("title"),
                  r.get("creator"),r.get("category"),r.get("sources"),r.get("kind_signal"),
                  work_id,r.get("match_status"),r.get("match_method"),
-                 r.get("entity_resolution_status"),r.get("confidence"),r.get("model_claim"),
+                 r.get("entity_resolution_status"),r.get("confidence"),clean_model,
                  json.dumps(play,ensure_ascii=False),json.dumps(rr,ensure_ascii=False)))
+            conn.execute("""INSERT INTO research_post_prompt_evidence
+                (post_key,prompt_status,raw_model_field,raw_prompt_field)
+                VALUES(?,?,?,?)
+                ON CONFLICT(post_key) DO UPDATE SET
+                prompt_status=excluded.prompt_status,raw_model_field=excluded.raw_model_field,
+                raw_prompt_field=excluded.raw_prompt_field""",
+                (key,post_prompt_status,r.get("model_claim"),r.get("prompt_evidence")))
         # Replace only current source observations; immutable JSON snapshots remain the history.
         conn.execute("DELETE FROM research_source_records")
         for r in sources:
@@ -333,8 +367,10 @@ def export_projection(conn: sqlite3.Connection) -> dict:
         w["evidence_level"]="READ_ME_REVIEWED" if w["review_level"]=="README_REVIEWED" else "COMMUNITY_INDEX_ONLY"
         w["execution_verified"]=False  # Never promote static entry detection into actual gameplay verification.
     posts=objs("""SELECT post_key,entity_id,post_url,title,creator,category,sources,
-        kind_signal,work_id,match_status,entity_status,confidence,model_claim,play_urls,repo_urls
-        FROM research_posts ORDER BY post_key""")
+        kind_signal,work_id,match_status,entity_status,confidence,p.model_claim,
+        play_urls,repo_urls,pe.prompt_status AS prompt_availability
+        FROM research_posts p LEFT JOIN research_post_prompt_evidence pe
+        ON pe.post_key=p.post_key ORDER BY p.post_key""")
     post_reviews = {row["post_key"]: dict(row) for row in conn.execute(
         "SELECT * FROM research_post_reviews WHERE review_status='APPROVED' AND evidence_url<>''")}
     for p in posts:
