@@ -72,6 +72,23 @@ CREATE TABLE IF NOT EXISTS research_browser_runs (
  FOREIGN KEY(work_id) REFERENCES research_works(work_id)
 );
 -- Curated adjudications are independent of snapshots and survive every re-import.
+CREATE TABLE IF NOT EXISTS research_runtime_evidence (
+ evidence_id TEXT PRIMARY KEY,
+ work_id TEXT NOT NULL REFERENCES research_works(work_id),
+ repository_full_name TEXT NOT NULL,
+ repo_commit_sha TEXT NOT NULL,
+ entry_path TEXT NOT NULL,
+ entry_sha256 TEXT NOT NULL,
+ report_status TEXT NOT NULL CHECK(report_status IN ('BROWSER_LOAD_CHECKED','INCOMPLETE_OR_FAILED')),
+ tested_at TEXT NOT NULL,
+ browser_name TEXT NOT NULL,
+ browser_version TEXT NOT NULL,
+ environment TEXT NOT NULL,
+ report_json TEXT NOT NULL,
+ screenshot_sha256 TEXT,
+ imported_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_runtime_work_time ON research_runtime_evidence(work_id,tested_at);
 CREATE TABLE IF NOT EXISTS research_work_reviews (
  work_id TEXT PRIMARY KEY REFERENCES research_works(work_id) ON DELETE CASCADE,
  review_status TEXT NOT NULL CHECK(review_status IN ('APPROVED','DRAFT','REJECTED')),
@@ -363,9 +380,15 @@ def export_projection(conn: sqlite3.Connection) -> dict:
             w["reviewed_at"] = reviewed["reviewed_at"]
         else:
             w["review_status"] = "UNREVIEWED"
+    latest_runs = {}
+    for run in objs("""SELECT work_id,evidence_id,report_status,repo_commit_sha,entry_sha256,
+               browser_name,browser_version,tested_at,screenshot_sha256
+               FROM research_runtime_evidence ORDER BY tested_at DESC,evidence_id DESC"""):
+        latest_runs.setdefault(run["work_id"], run)
     for w in works:
         w["evidence_level"]="READ_ME_REVIEWED" if w["review_level"]=="README_REVIEWED" else "COMMUNITY_INDEX_ONLY"
-        w["execution_verified"]=False  # Never promote static entry detection into actual gameplay verification.
+        w["latest_browser_evidence"]=latest_runs.get(w["work_id"])
+        w["execution_verified"]=False  # Never promote static load checks into gameplay verification.
     posts=objs("""SELECT p.post_key,p.entity_id,p.post_url,p.title,p.creator,p.category,p.sources,
         p.kind_signal,p.work_id,p.match_status,p.entity_status,p.confidence,p.model_claim,
         p.play_urls,p.repo_urls,pe.prompt_status AS prompt_availability
