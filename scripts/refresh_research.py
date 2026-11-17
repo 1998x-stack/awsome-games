@@ -17,16 +17,12 @@ from datetime import date
 from pathlib import Path
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
+from source_adapters import ADAPTERS, BY_NAME
 
 ROOT=Path(__file__).resolve().parents[1]
 BASE=ROOT/"data/research/v1"
 CURRENT=ROOT/"data/research/current"
-SOURCES=(
-    ("FableList","https://raw.githubusercontent.com/fengyiqicoder/awesome-fable-5.2/main/data/works.json"),
-    ("VibeGamer","https://raw.githubusercontent.com/ummydev/awesome-claude-fable-games/main/data/games.json"),
-    ("DramaSo","https://raw.githubusercontent.com/mofa-si/awesome-fable-5-2-videos/main/data/collection.json"),
-    ("Sandbase","https://raw.githubusercontent.com/sandbase-lab/awesome-fable-5-2/main/data/videos.json"),
-)
+SOURCES=tuple((adapter.name,adapter.url) for adapter in ADAPTERS)
 
 def post_id(url):
     """Only X/Twitter status URLs are eligible to become post entity IDs."""
@@ -41,20 +37,10 @@ def post_id(url):
         return None
 
 def normalize(source,x,index,source_url):
-    post={"FableList":"post","VibeGamer":"post_url","DramaSo":"sourceUrl","Sandbase":"postUrl"}[source]
-    author=x.get("maker_handle") or x.get("maker") if source=="VibeGamer" else x.get("author") or ""
-    if isinstance(author,dict):author=author.get("handle") or author.get("name") or ""
-    p=x.get(post) or None
-    title=x.get("name") if source=="VibeGamer" else x.get("title")
-    category=x.get("section") if source=="FableList" else (" / ".join(x.get("tags",[])) if source=="VibeGamer" else x.get("category"))
-    play=x.get("url") if source=="FableList" else x.get("play_url") if source=="VibeGamer" else None
-    repo=x.get("open_source_url") if source=="VibeGamer" else None
-    return {"source":source,"source_id":str(x.get("slug") if source=="VibeGamer" else x.get("id",index)),
-            "post_id":post_id(p),"post_url":p,"title":title or "",
-            "title_zh":x.get("title_zh") or x.get("titleZh") or "",
-            "category":category or "","author":str(author or ""),
-            "play_url":play,"repo_url":repo,
-            "source_url":source_url.replace("raw.githubusercontent.com/","github.com/").replace("/main/","/blob/main/",1)}
+    """Backwards-compatible entrypoint; each source has an explicit schema."""
+    adapter=BY_NAME[source]
+    return adapter.normalize(x,index,source_url,post_id)
+
 
 def fetch_json(url,max_bytes=8*1024*1024):
     if not url.startswith("https://raw.githubusercontent.com/"):
@@ -162,10 +148,10 @@ def prepare(base=BASE,current=CURRENT,fetch=fetch_json,allow_shrink=False):
     previous,old=load_current_pair(base,current)
     prior=Counter(x["source"] for x in previous["records"])
     recs=[];info=[]
-    for source,url in SOURCES:
+    for adapter in ADAPTERS:
+        source,url=adapter.name,adapter.url
         payload=fetch(url)
-        entries=payload.get("entries") if source=="DramaSo" else payload
-        if not isinstance(entries,list) or not entries:raise ValueError("Empty or invalid upstream JSON: "+source)
+        entries=adapter.entries(payload)
         unique=set()
         for i,x in enumerate(entries):
             r=normalize(source,x,i,url)
