@@ -1,0 +1,324 @@
+{
+  "schema_version": 1,
+  "repository_full_name": "SharpWizard/ironvale",
+  "pinned_commit_sha": "41672ef32a42c154b237e579cdf357144709204a",
+  "pinned_branch_name": "main",
+  "pinned_tree_verified_not_truncated": true,
+  "source": "https://github.com/SharpWizard/ironvale/tree/41672ef32a42c154b237e579cdf357144709204a",
+  "repository_metadata_license_spdx": "NOASSERTION",
+  "license_and_asset_rights_approved": false,
+  "community_relation": "PROJECT_SOURCE",
+  "community_relation_note": "README与PROMPTS.md公开21次自然语言请求",
+  "browser_status": "NOT_TESTED",
+  "audit_status": "FULL_GIT_TREE_INVENTORY_ONLY_WITH_ENTRY_HTML_SCANS",
+  "work_reports": [
+    "data/research/audits/F52-W006.json"
+  ],
+  "file_count": 43,
+  "entry_html_scan_count": 1,
+  "unread_source_or_doc_files": 34,
+  "binary_and_other_metadata_files": 8,
+  "files": [
+    {
+      "path": ".gitignore",
+      "git_blob_sha": "e6909020c37c974160e34563b71d7f0a81776f4f",
+      "size_bytes": 34,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "PROMPTS.md",
+      "git_blob_sha": "07ab7870bdc7f80ee7388bc40f419f3ce680a1ea",
+      "size_bytes": 5135,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "README.md",
+      "git_blob_sha": "c619d33b3bc9e43aff2cd59d20e095da657bf9d3",
+      "size_bytes": 9659,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "build.js",
+      "git_blob_sha": "0f01e4d6936155994613663a35821d181cc68641",
+      "size_bytes": 972,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "index.html",
+      "git_blob_sha": "ef9bba3fa2ccdf976c4ef1a9eb93e0cc0ddecf4f",
+      "size_bytes": 203,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "ironvale.html",
+      "git_blob_sha": "7c1dde7aa51ebc97cdf97e74015069857ad31c56",
+      "size_bytes": 512832,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "ENTRY_TEXT_SCAN_RECORDED_IN_WORK_REPORT"
+    },
+    {
+      "path": "lib/icon.png",
+      "git_blob_sha": "2e9d0751efdf285f4ed6107f7b7d67496fde7268",
+      "size_bytes": 12076,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "lib/three.min.js",
+      "git_blob_sha": "b14f47c0908bab15e890b468d53bb07db0be3a18",
+      "size_bytes": 603445,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "models/coast.js",
+      "git_blob_sha": "55718f8f1900cd8279831bff4bb8be9cffc2696a",
+      "size_bytes": 2184109,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "models/core.js",
+      "git_blob_sha": "37d8bc2ef1dd19627ccae1665c572f64f7020771",
+      "size_bytes": 11554409,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "models/marsh.js",
+      "git_blob_sha": "95bae7879f022ef8add1611f9020fe109680cfd5",
+      "size_bytes": 1059876,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "models/wilds.js",
+      "git_blob_sha": "8263bcac3e16b5d205e6222d24554af6ff45ee2a",
+      "size_bytes": 1456338,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "screenshots/01-main-menu.jpg",
+      "git_blob_sha": "33b59855f39b3c5ff23f5b8d32644916f2177e59",
+      "size_bytes": 125139,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "screenshots/02-green-vale-town.jpg",
+      "git_blob_sha": "b3ad5849cad4dae3b0d869f678d7a42b20bbd89d",
+      "size_bytes": 186469,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "screenshots/03-highlands-full-map.jpg",
+      "git_blob_sha": "26e8990318ca88ee89e7abe120e595c7d83ca1a4",
+      "size_bytes": 137520,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "screenshots/04-corsair-coast-town.jpg",
+      "git_blob_sha": "cfc3119fddb602dff454a2044a05670d0dacf2a6",
+      "size_bytes": 178020,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "screenshots/05-highlands-town.jpg",
+      "git_blob_sha": "ee3622e0310d4666d15309878488c30eb2386066",
+      "size_bytes": 174481,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "screenshots/06-primeval-wilds-windriders.jpg",
+      "git_blob_sha": "0de93a490addc93e79791770c67201f23c71a804",
+      "size_bytes": 181069,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "screenshots/07-hollow-marsh-town.jpg",
+      "git_blob_sha": "bbc927e2e88b6fb3f387fc6330d77ef08b7c15b8",
+      "size_bytes": 170987,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "src/01_core.js",
+      "git_blob_sha": "a9ed565666fd47b4d85b0dabb1ba3ecb2f634d42",
+      "size_bytes": 21125,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/02_audio.js",
+      "git_blob_sha": "c20244a8636f2f8a05966f97b79736eb396750d7",
+      "size_bytes": 13953,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/03_render.js",
+      "git_blob_sha": "e1d9bb6bca70bf1ea8245e813b552e012861bf04",
+      "size_bytes": 61247,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/04_map.js",
+      "git_blob_sha": "347a9cc7a49deed3569c84a0bfe488cc44f29dfb",
+      "size_bytes": 43246,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/05_path.js",
+      "git_blob_sha": "a42f9a45d0091d8a5cd51c1de9ed508951fc42f6",
+      "size_bytes": 6747,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/06_entities.js",
+      "git_blob_sha": "b8b07645f90998148f0bff2d5a6ff21e05b0437c",
+      "size_bytes": 49904,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/07_view.js",
+      "git_blob_sha": "50b7d02ab520618ef277e1fd0d989eff1c1fe619",
+      "size_bytes": 29767,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/08_ai.js",
+      "git_blob_sha": "b1362bd96937e3824537ff4df84b73e0292155a6",
+      "size_bytes": 35056,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/09_input.js",
+      "git_blob_sha": "0f2226eb60b43da50c769d48c064730a4cb29918",
+      "size_bytes": 32581,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/10_ui.js",
+      "git_blob_sha": "d6d781553828d13fcfc955b28c765ed4de5a1a16",
+      "size_bytes": 51043,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/11_main.js",
+      "git_blob_sha": "7c891514ce19d9a5a30e004e5952117ec8dc6250",
+      "size_bytes": 16196,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/12_chars.js",
+      "git_blob_sha": "0908115d93955208db9847f3a38735134980a692",
+      "size_bytes": 4756,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/13_content.js",
+      "git_blob_sha": "92d8f1458985c126b7a3bd976fa4f3f704a5818b",
+      "size_bytes": 38740,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/14_atmos.js",
+      "git_blob_sha": "426bb8bbd406498931ee8e1005bbf9b469afe3ee",
+      "size_bytes": 14685,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/15_extras.js",
+      "git_blob_sha": "55afd4796580a0f965e8389b8dae8fdf47c149be",
+      "size_bytes": 13673,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/16_post.js",
+      "git_blob_sha": "71321ba5e9fa11a9b4be9a5f5b6e1a9c4ff0c27d",
+      "size_bytes": 7733,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/17_ui2.js",
+      "git_blob_sha": "b6b619ebccf88c94c1c6d607dc1e4a4bf1e16e28",
+      "size_bytes": 17976,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/shell.html",
+      "git_blob_sha": "9824e8391fe6cea10962f698e826a657334095a1",
+      "size_bytes": 53986,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "tools/bake.html",
+      "git_blob_sha": "6ffb01db5d40c6db4d9c18bf3724b653eecb01c3",
+      "size_bytes": 490,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "tools/bake.js",
+      "git_blob_sha": "0fcdd1800654dba6e858c2739ef194b03796130b",
+      "size_bytes": 16385,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "tools/exe/Launcher.cs",
+      "git_blob_sha": "f470fe10a63893a82fd1f801215d3b2707b4a4b1",
+      "size_bytes": 4938,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "tools/exe/make_exe.py",
+      "git_blob_sha": "e834d2e70d4c7c6c3a4ca00906fe43280121b1ab",
+      "size_bytes": 4270,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "tools/manifest.js",
+      "git_blob_sha": "b49cf32f785582a5c278f7f83ec6902627caa0e5",
+      "size_bytes": 16303,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "tools/server.js",
+      "git_blob_sha": "8563b1d75dd8e903a47149e4e0291c5fb2b54f6f",
+      "size_bytes": 1794,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    }
+  ]
+}

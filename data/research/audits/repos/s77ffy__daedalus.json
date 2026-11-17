@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "repository_full_name": "S77FFY/daedalus",
+  "pinned_commit_sha": "be77f2f3d6ff11127684654617f157c5ef9f545e",
+  "pinned_branch_name": "main",
+  "pinned_tree_verified_not_truncated": true,
+  "source": "https://github.com/S77FFY/daedalus/tree/be77f2f3d6ff11127684654617f157c5ef9f545e",
+  "repository_metadata_license_spdx": "NOASSERTION",
+  "license_and_asset_rights_approved": false,
+  "community_relation": "PROJECT_SOURCE",
+  "community_relation_note": "README自述 built using Fable 5.2，过程与提示词未公开",
+  "browser_status": "NOT_TESTED",
+  "audit_status": "FULL_GIT_TREE_INVENTORY_ONLY_WITH_ENTRY_HTML_SCANS",
+  "work_reports": [
+    "data/research/audits/F52-W035.json"
+  ],
+  "file_count": 4,
+  "entry_html_scan_count": 1,
+  "unread_source_or_doc_files": 3,
+  "binary_and_other_metadata_files": 0,
+  "files": [
+    {
+      "path": "README.md",
+      "git_blob_sha": "d93266eab489d35c3fe4c427b19a3c6a6aeebb10",
+      "size_bytes": 63,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "builds/daedalus-v0.1.1.html",
+      "git_blob_sha": "e8c157b8b92dbcabc4f9ac6273884d52f745157e",
+      "size_bytes": 37602,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "builds/daedalus-v1.0.0.html",
+      "git_blob_sha": "9a95381a31b76be684baad5383a8552c4c5f871a",
+      "size_bytes": 124539,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "index.html",
+      "git_blob_sha": "9a95381a31b76be684baad5383a8552c4c5f871a",
+      "size_bytes": 124539,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "ENTRY_TEXT_SCAN_RECORDED_IN_WORK_REPORT"
+    }
+  ]
+}
