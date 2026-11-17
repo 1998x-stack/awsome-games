@@ -24,7 +24,16 @@ SECRET_SUFFIXES = {'.pem','.key','.p12','.pfx'}
 # Re-collecting must never silently turn an artifact that was measured as
 # incompatible back into a publishable one — same rule as the research layer,
 # where a source refresh may not overwrite a reviewed conclusion.
-RUNTIME_REVIEWED_STATUSES = {'sandbox_incompatible', 'runtime_verification_failed'}
+RUNTIME_REVIEWED_STATUSES = {
+    'sandbox_incompatible',            # breaks under the required opaque-origin sandbox
+    'runtime_verification_failed',
+    'runtime_requires_network',        # needs an external CDN/asset host
+    'runtime_third_party_beacon',      # loads third-party analytics
+    'runtime_optional_sensor_denied',  # needs a device sensor the sandbox denies
+    'runtime_no_interaction',          # loaded but never reacted to input
+    'runtime_driver_timeout',          # blocked the driver; hard-killed
+    'runtime_needs_retest',            # measurement was unreliable
+}
 
 
 def run(cmd, cwd=None, timeout=600, check=True):
@@ -283,6 +292,10 @@ def process_repo(conn, run_id, repo_row, session, force, skip_api, max_file_byte
             best=('smoke_test_passed' if 'smoke_test_passed' in statuses else
                   'entrypoint_found' if 'entrypoint_found' in statuses else
                   'sandbox_incompatible' if 'sandbox_incompatible' in statuses else
+                  next((x for x in ('runtime_requires_network', 'runtime_third_party_beacon',
+                                    'runtime_optional_sensor_denied', 'runtime_no_interaction',
+                                    'runtime_driver_timeout', 'runtime_needs_retest',
+                                    'runtime_verification_failed') if x in statuses), '') or
                   'missing_assets' if 'missing_assets' in statuses else
                   'requires_build' if 'requires_build' in statuses else 'needs_review')
             conn.execute('UPDATE projects SET source_status=?,playable_status=?,updated_at=? WHERE id=?',('cloned',best,now(),pid))

@@ -19,12 +19,16 @@ data/raw/
 data/fable_projects.sqlite
 data/catalog.sqlite-shm
 data/catalog.sqlite-wal
-# Local collection output. Only publication-approved repositories are tracked:
-# un-ignore a repository here once it is listed in config/publication_approvals.json
-# and its SPDX metadata and bundled-asset rights have been reviewed. Everything
-# else stays local so unreviewed third-party code is never committed or deployed.
+# Local collection output. Everything is ignored except the exact artifacts that
+# have been approved in config/publication_approvals.json, whose SPDX metadata
+# and bundled-asset rights were reviewed, and whose isolated runtime result is
+# recorded in data/reports/. A re-collection rewrites games/_repos in full, so the
+# allowlist is per file: adding an approved artifact means adding two lines here.
 games/_repos/*
 !games/_repos/Time-dev-alt__Fable-5.1-Games/
+games/_repos/Time-dev-alt__Fable-5.1-Games/*
+!games/_repos/Time-dev-alt__Fable-5.1-Games/LICENSE
+!games/_repos/Time-dev-alt__Fable-5.1-Games/Soccer.html
 
 # Generated Pages artifact
 site/data/

@@ -29,8 +29,10 @@ SCREENSHOT_NAME=""
 MEMORY="${SMOKE_MEMORY:-1g}"
 CPUS="${SMOKE_CPUS:-1}"
 MODE="smoke"
+MANIFEST=""
 IDLE_MS=""
 SETTLE_MS=""
+ENTRY_TIMEOUT=""
 
 die() { printf '%s\n' "error: $*" >&2; exit 2; }
 
@@ -42,8 +44,10 @@ while [ $# -gt 0 ]; do
     --image) IMAGE="${2:-}"; shift 2 ;;
     --screenshot) SCREENSHOT_NAME="${2:-}"; shift 2 ;;
     --mode) MODE="${2:-}"; shift 2 ;;
+    --manifest) MANIFEST="${2:-}"; shift 2 ;;
     --idle-ms) IDLE_MS="${2:-}"; shift 2 ;;
     --settle-ms) SETTLE_MS="${2:-}"; shift 2 ;;
+    --per-entry-timeout) ENTRY_TIMEOUT="${2:-}"; shift 2 ;;
     --browser-version) BROWSER_VERSION="${2:-}"; shift 2 ;;
     --environment) ENVIRONMENT="${2:-}"; shift 2 ;;
     -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
@@ -52,12 +56,22 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$ROOT" ] || die "--root is required"
-[ -n "$ENTRY" ] || die "--entry is required"
+if [ "$MODE" != "batch" ]; then [ -n "$ENTRY" ] || die "--entry is required"; fi
 [ -n "$OUT" ] || die "--out is required"
 case "$MODE" in
-  smoke|gameplay) ;;
-  *) die "--mode must be smoke or gameplay" ;;
+  smoke|gameplay|batch) ;;
+  *) die "--mode must be smoke, gameplay or batch" ;;
 esac
+if [ "$MODE" = "batch" ]; then
+  [ -n "$MANIFEST" ] || die "--mode batch requires --manifest"
+  [ -f "$MANIFEST" ] || die "manifest not found: $MANIFEST"
+  # macOS Docker Desktop mounts nested paths under /private/tmp as empty
+  # directories, so the manifest is staged inside the repository instead.
+  REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
+  mkdir -p "$REPO_ROOT/.cache"
+  cp "$MANIFEST" "$REPO_ROOT/.cache/isolation-manifest.json"
+  MANIFEST_ABS="$REPO_ROOT/.cache/isolation-manifest.json"
+fi
 [ -d "$ROOT" ] || die "staged root does not exist: $ROOT"
 command -v docker >/dev/null 2>&1 || die "docker is not installed"
 docker image inspect "$IMAGE" >/dev/null 2>&1 || die "image not found: $IMAGE (build it first)"
@@ -66,6 +80,7 @@ docker image inspect "$IMAGE" >/dev/null 2>&1 || die "image not found: $IMAGE (b
 case "$ENTRY" in
   /*|*..*|*\\*) die "entry must be a repository-relative path without '..'" ;;
 esac
+if [ "$MODE" = "batch" ]; then ENTRY_PROBE=1; else ENTRY_PROBE="$ENTRY"; fi
 
 ROOT_ABS="$(cd "$ROOT" && pwd -P)"
 mkdir -p "$OUT"
@@ -75,12 +90,20 @@ OUT_ABS="$(cd "$OUT" && pwd -P)"
 # Preflight: on macOS, Docker Desktop only shares some host paths with its VM and
 # nested bind mounts under /private/tmp can silently appear empty. Detect that
 # here so the failure is actionable instead of a confusing 'entry does not exist'.
+if [ "$MODE" = "batch" ]; then
+  # Batch mode has no single entry to probe; detect the "mount is empty" failure instead.
+  MOUNT_PROBE='test -n "$(ls -A /staged 2>/dev/null)"'
+else
+  MOUNT_PROBE='test -f "$1"'
+fi
 if ! docker run --rm -v "$ROOT_ABS:/staged:ro" alpine:3.20 \
-     test -f "/staged/$ENTRY" >/dev/null 2>&1; then
-  die "container cannot see $ROOT_ABS/$ENTRY -- stage the artifact under the repository
+     sh -c "$MOUNT_PROBE" sh "/staged/$ENTRY_PROBE" >/dev/null 2>&1; then
+  die "container cannot see $ROOT_ABS/$ENTRY_PROBE -- stage the artifact under the repository
        (for example ./.cache/isolated-stage), which is always shared with the Docker VM"
 fi
 
+# A reused volume would mix this run's reports with the previous run's.
+docker volume rm -f "$VOLUME" >/dev/null 2>&1 || true
 docker volume create "$VOLUME" >/dev/null
 
 CONTAINER_ARGS=(
@@ -98,7 +121,14 @@ CONTAINER_ARGS=(
   -v "$VOLUME:/reports"
 )
 
-if [ "$MODE" = "gameplay" ]; then
+if [ "$MODE" = "batch" ]; then
+  REPORT_NAME="summary.json"
+  SMOKE_ARGS=(/work/browser_batch_probe.py --root /staged --manifest /manifest.json --out /reports/batch)
+  [ -n "$IDLE_MS" ] && SMOKE_ARGS+=(--idle-ms "$IDLE_MS")
+  [ -n "$SETTLE_MS" ] && SMOKE_ARGS+=(--settle-ms "$SETTLE_MS")
+  [ -n "$ENTRY_TIMEOUT" ] && SMOKE_ARGS+=(--per-entry-timeout "$ENTRY_TIMEOUT")
+  CONTAINER_ARGS+=(-v "$MANIFEST_ABS:/manifest.json:ro")
+elif [ "$MODE" = "gameplay" ]; then
   REPORT_NAME="gameplay.json"
   SMOKE_ARGS=(/work/browser_gameplay_probe.py --root /staged --entry "$ENTRY" --report "/reports/$REPORT_NAME")
   [ -n "$IDLE_MS" ] && SMOKE_ARGS+=(--idle-ms "$IDLE_MS")
@@ -121,6 +151,11 @@ set -e
 CID="$(docker create -v "$VOLUME:/r" alpine:3.20 true)"
 docker cp "$CID:/r/." "$OUT_ABS/" >/dev/null 2>&1 || true
 docker rm "$CID" >/dev/null
+# Batch runs write into /reports/batch; flatten so callers get one report dir.
+if [ "$MODE" = "batch" ] && [ -d "$OUT_ABS/batch" ]; then
+  cp -R "$OUT_ABS/batch/." "$OUT_ABS/" 2>/dev/null || true
+  rm -rf "$OUT_ABS/batch"
+fi
 
 if [ -n "$BROWSER_VERSION" ] || [ -n "$ENVIRONMENT" ]; then
   printf '{"browser_version":"%s","environment":"%s"}\n' \

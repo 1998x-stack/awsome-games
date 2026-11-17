@@ -1,7 +1,16 @@
+# Keep the build context tiny: the image only needs two small scripts.
 .git
+.cache
 .venv
+venv
+games
 site/data
 site/games
-games
-data/catalog.sqlite*
+site/build-manifest.json
+data
+docs
+tests
 *.png
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
