@@ -105,7 +105,7 @@ JSON 快照推导。但它意味着"直接读取仓库里的 `.sqlite`"得到的
 
 | 命令 | 结果 |
 |---|---|
-| `python -m unittest discover -s tests -v` | **75 passed, 0 failed**（起始为 56） |
+| `python -m unittest discover -s tests -v` | **76 passed, 0 failed**（起始为 56） |
 | `python scripts/build_catalog.py --check` | exit 0；integrity_check=ok；foreign_key_errors=0；projects=155 |
 | `python scripts/check_catalog.py` | exit 0；`problems: []` |
 | `python -m compileall -q scripts tests` | exit 0 |
@@ -156,6 +156,7 @@ JSON 快照推导。但它意味着"直接读取仓库里的 `.sqlite`"得到的
 | # | 严重度 | 缺陷（实测证据） | 修复 |
 |---|---|---|---|
 | 1 | P1 | `review.html` 的"关联研究记录"跨页链接被渲染成不可点击的 `<span>`：`safeUrl()` 用 `new URL(value)` 解析相对地址会抛异常。M5 要求的 `Post ↔ Work ↔ Repository ↔ Audit` 溯源跳转实际不可用（实测 `footer.locator("a").count() == 1`） | 三个前端统一改为 `new URL(value, document.baseURI)`，同源目标保持相对路径（兼容 GitHub 项目 Pages 的 `/<repo>/` 子路径），并补上凭据拒绝 |
+| 1b | P1 | **链接可点后仍不可用（线上发现）**：`makeLink()` 对**所有**链接强制 `target="_blank"`，点击后在**新标签页**打开而不是就地导航（线上实测 `target=_blank`，新标签 URL = `.../research.html?kind=repositories&id=...`） | 仅**跨源**链接开新标签页；同源溯源跳转就地导航。测试改为真实 `click()`（PR #10） |
 | 2 | P1 | 幂等导入实际**不幂等**：`AUTOINCREMENT` + 冲突的 `INSERT OR IGNORE` 每次运行都推进 `sqlite_sequence`；`projects.updated_at` 无条件改写为当前时间。两次 `build_catalog.py --check` 的逻辑 dump 相差 10 行 | AUTOINCREMENT 表改为 `INSERT ... SELECT ... WHERE NOT EXISTS` 守卫式插入；`updated_at` 改为仅在内容真正变化时才推进。修复后两次运行 dump 差异 = **0 行** |
 | 3 | P1 | `export_seed.py` 把每条作品的证据类型硬编码为 `sqlite_snapshot_reconstruction`，重新导入时与真实证据行并存 → `project_evidence` 由 155 **翻倍到 310**，`site/data/catalog.json` 为全部 155 个作品公开了一个伪造来源 | 导出保留每来源真实 `evidence_type`/`confidence`（`evidence_by_source`）；`seed_database` 优先使用它，且**永不**把 `SYNTHETIC_EVIDENCE_TYPES` 标记落成证据行。重新生成 `data/seeds/legacy_projects.jsonl` 后 `project_evidence` 稳定在 155，投影中占位符为 0 |
 | 4 | P2 | `build_catalog.py --fresh` 直接 `unlink()` 权威 SQLite，无任何可恢复副本 | 删库前用 SQLite backup API 写入 `data/backups/catalog-<UTC>.sqlite` 并做 `integrity_check`，失败则拒绝重建 |
@@ -171,13 +172,21 @@ JSON 快照推导。但它意味着"直接读取仓库里的 `.sqlite`"得到的
 | 11 个已审静态入口的真实运行 | `BLOCKED` | 同上；且入口文件不在本地 |
 | 83 个候选仓库的逐行源码/许可证审查 | `NOT_STARTED` | 只有 GitHub 文件树与部分 README 级核验 |
 | 904 条未归并原帖的逐条证据审核 | `NOT_STARTED` | 需要一手证据；不得自动升级为作品 |
-| GitHub Pages 生产发布核实 | `BLOCKED` | 见 HANDOFF 文档第 7 节 |
+| GitHub Pages 生产发布核实 | **`VERIFIED`** | 两个 PR 合并后 `build` 与 `deploy` 两个 job 均 success；线上页面全部 HTTP 200；真实 Chromium 点击验证通过（详见 HANDOFF 第 7 节） |
 | SQLite 逐字节可复现 | `NOT_STARTED` | 逻辑内容已稳定；二进制层面未解决（第 4 节） |
 
-## 8. 复现本基线
+## 8. 测试质量教训
+
+PR #9 的 E2E 测试用 `page.goto(href)` **直接跟随**链接，没有真正点击，因此没能发现 `target="_blank"` 缺陷——该缺陷只在**对线上部署真实点击**时才暴露。已修正：
+
+* 导航类测试一律使用真实用户手势（`click()`），不得用直接导航代替。
+* 新增源码契约 `test_internal_links_do_not_force_a_new_tab`，禁止无条件的 `a.target='_blank'`。
+* 两个新测试已在**修复前**的提交版本上验证会失败（`AssertionError: '_blank' is not None`），修复后通过。
+
+## 9. 复现本基线
 
 ```bash
-git checkout feat/pi-agent-baseline-hardening-20261117
+git checkout main && git pull            # 已包含 PR #9 与 PR #10
 /opt/homebrew/bin/python3.12 -m venv .venv && .venv/bin/python -m pip install -r requirements.txt
 .venv/bin/python scripts/build_catalog.py --check
 .venv/bin/python scripts/check_catalog.py

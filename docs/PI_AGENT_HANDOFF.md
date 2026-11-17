@@ -20,8 +20,10 @@
 | 起始状态 | 工作树**干净**，`0 ahead / 0 behind origin/main`，无 stash |
 | 工作分支 | `feat/pi-agent-baseline-hardening-20261117` |
 | 结束时 SHA | 见文末"本轮提交"一节 |
-| PR | https://github.com/1998x-stack/awsome-games/pull/9 |
-| CI | https://github.com/1998x-stack/awsome-games/actions/runs/44042084460 — `Validate catalog` = **success** |
+| PR | https://github.com/1998x-stack/awsome-games/pull/9 （已合并）· https://github.com/1998x-stack/awsome-games/pull/10 （已合并） |
+| CI | #9: https://github.com/1998x-stack/awsome-games/actions/runs/44042084460 · #10: https://github.com/1998x-stack/awsome-games/actions/runs/44043909660 — 均 `Validate catalog` = **success** |
+| main 结束 SHA | `3375af2af1f8c68658d606b709326df7f439bfcb` |
+| 生产 Pages | 已部署并**真实点击验证**（见第 7 节） |
 
 保护现状：`data/catalog.sqlite` 已备份到 `/tmp/awsome-games-backup/catalog.sqlite.baseline-ebab78e`
 （SHA-256 `602a2a80a77b0e95b883eb419006a8017ee4cca5d857a31c4a0712802b56d5fa`）。
@@ -53,7 +55,7 @@
 | `research_runtime_evidence` | 0 | **0** | `SELECT COUNT(*)` | **没有任何第三方游戏被验证** |
 | `research_work_reviews` / `post_reviews` | 0 / 0 | 0 / 0 | `SELECT COUNT(*)` | `config/research_reviews.json` 仍为空 |
 | 发布到站点的游戏 | 0 | 0 | `build_site.py` → `published_games` | 授权白名单仍为空 |
-| 单元测试数 | 56 | **75** | `python -m unittest discover -s tests -v` | +19 个回归测试 |
+| 单元测试数 | 56 | **76** | `python -m unittest discover -s tests -v` | +20 个回归测试 |
 
 ### 口径警告（必须保持）
 
@@ -105,6 +107,7 @@
 | 文件 | 变更 | 状态 |
 |---|---|---|
 | `site/assets/review.js` | **修复死链**：`safeUrl` 改为 `new URL(value, document.baseURI)`，同源目标保持相对路径（兼容 GitHub 项目 Pages 子路径），拒绝内嵌凭据 | `VERIFIED` |
+| `site/assets/review.js`、`research.js` | **修复后续缺陷（#10）**：`makeLink()`/`link()` 对所有链接强制 `target="_blank"`，导致应用内溯源跳转离开当前标签页。现仅跨源链接开新标签页 | `VERIFIED`（线上真实点击） |
 | `site/assets/research.js` | 同样的解析与凭据校验 | `VERIFIED` |
 | `site/assets/app.js` | 同上的凭据校验 | `VERIFIED` |
 | `site/index.html`、`site/research.html` | 移除硬编码的"83 个仓库"与研究快照日期 | `VERIFIED` |
@@ -128,8 +131,13 @@
 | `docker build -f scripts/isolation/Dockerfile.smoke -t awsome-games-smoke .` | exit 0 — 镜像 1.93 GB |
 | `bash scripts/isolation/run_isolated_smoke.sh --root .cache/isolated-stage --entry demos/fps/index.html --out .cache/iso-reports` | exit 0（见第 5 节） |
 | `git push -u origin feat/pi-agent-baseline-hardening-20261117` | exit 0 |
-| `gh pr create ...` | PR #9 |
-| `gh pr checks 9` | `validate  pass  14s` |
+| `gh pr create ...` | PR #9、PR #10 |
+| `gh pr checks 9` / `gh pr checks` | `validate  pass  13–14s` |
+| `gh pr merge 9 --squash --delete-branch` | MERGED，merge commit `e41b877c542bb139ca942782fc93a09328c4dbd2` |
+| `gh pr merge 10 --squash` | MERGED，merge commit `3375af2af1f8c68658d606b709326df7f439bfcb` |
+| `gh run view <pages run> --json jobs` | `build -> success`、`deploy -> success` |
+| `curl` 线上页面与数据文件 | 全部 HTTP 200（见第 5 节） |
+| Playwright 真实点击线上链接 | 0 个新标签页，就地导航，详情对话框打开 |
 
 ### 复现关键缺陷的命令（修复前后对比）
 
@@ -190,6 +198,23 @@ sqlite3 data/catalog.sqlite "SELECT COUNT(*) FROM research_runtime_evidence;"  �
 
 已固化为 `tests/test_site_e2e.py`（Playwright 缺失时自动 skip）与 `tests/test_site_link_policy.py`。
 
+### 生产站点实测（2026-11-17，合并并部署之后）
+
+对 `https://1998x-stack.github.io/awsome-games/`（注意：Pages **项目站点**位于 `/<repo>/` 子路径，正是修复所针对的场景）执行真实 Chromium 验证：
+
+| 检查 | 结果 |
+|---|---|
+| 三个页面 page error | 0 |
+| 外部证据链接 `target` | `_blank` |
+| 内部 Evidence Lab 链接 `target` | **无**（就地导航） |
+| 点击内部链接后新开标签页数 | **0** |
+| 导航后的 URL | `.../awsome-games/research.html?kind=repositories&id=0xCodez%2Fthousand-peaks` |
+| 详情对话框 | 已打开，标题 `Dragon of a Thousand Peaks` |
+| 线上统计（研究层） | 1,118 / 907 / 64 / 83 / 12 |
+| 线上统计（目录） | 155 / 54 / 59 / 0 |
+| 线上 `build-manifest.json` | `repository_ref = 3375af2af1f8c68658d606b709326df7f439bfcb`、`playable_published = 0`、`repository_snapshots_published = []` |
+| 线上资源 HTTP 状态 | 全部 200 |
+
 ---
 
 ## 6. Security & Licensing
@@ -213,27 +238,46 @@ sqlite3 data/catalog.sqlite "SELECT COUNT(*) FROM research_runtime_evidence;"  �
 
 | 项目 | 值 |
 |---|---|
-| commit | `fix(M1/M3/M5): restore provenance fidelity, idempotent rebuild and cross-page evidence links` |
-| 分支 | `feat/pi-agent-baseline-hardening-20261117` |
-| 推送 | 成功（`* [new branch]`），**未强推** |
-| PR | https://github.com/1998x-stack/awsome-games/pull/9 |
-| CI job | `Validate catalog` = **success**（14 s）· https://github.com/1998x-stack/awsome-games/actions/runs/44042084460 |
-| 合并 | **尚未合并**（见下） |
-| GitHub Pages | 本 PR 未触发部署（`pages.yml` 只在 push 到 `main` 或手动触发时运行）。**未声称任何生产上线成功。** |
-| 线上可访问性核实 | `NOT_TESTED`（需合并后触发 Pages workflow 才能核实） |
+| commit #9 | `fix(M1/M3/M5): restore provenance fidelity, idempotent rebuild and cross-page evidence links` |
+| commit #10 | `fix(M5): keep the Evidence Lab audit-trail link in the same tab` |
+| 分支 | `feat/pi-agent-baseline-hardening-20261117`、`fix/m5-internal-evidence-link` |
+| 推送 | 成功，**未强推** |
+| PR #9 | https://github.com/1998x-stack/awsome-games/pull/9 — MERGED (`e41b877c542bb139ca942782fc93a09328c4dbd2`) |
+| PR #10 | https://github.com/1998x-stack/awsome-games/pull/10 — MERGED (`3375af2af1f8c68658d606b709326df7f439bfcb`) |
+| CI (#9) | `Validate catalog` = **success**（14 s）· https://github.com/1998x-stack/awsome-games/actions/runs/44042084460 |
+| CI (#10) | `Validate catalog` = **success**（13 s）· https://github.com/1998x-stack/awsome-games/actions/runs/44043909660 |
+| 分支保护 | `main` **未受保护**（`GET /branches/main/protection` → 404），无需人工审批 |
+| GitHub Pages workflow (#9) | https://github.com/1998x-stack/awsome-games/actions/runs/44042834054 — `build` success、`deploy` success |
+| GitHub Pages workflow (#10) | https://github.com/1998x-stack/awsome-games/actions/runs/44044106186 — `build` success、`deploy` success |
+| Pages URL | https://1998x-stack.github.io/awsome-games/ |
+| deployments | #9 → id 7847475003 (`e41b877c…`) · #10 → SHA `3375af2a…` |
 
-### 关于合并的准确状态
+### 生产上线核实（真实证据，非推测）
 
-CI 全绿、无安全/许可证阻塞、未发现分支保护禁止。但**本报告作者在本轮没有执行合并**，
-理由：合并会触发 GitHub Pages **生产部署**（属"生产权限变更/不可逆操作"），
-按硬约束 §1.9 应先取得人工确认。授权已具备时，合并命令为：
+```
+curl -s -o /dev/null -w '%{http_code}' https://1998x-stack.github.io/awsome-games/
+/           200   /research.html 200   /review.html 200
+/assets/review.js 200   /data/review-queue.json 200   /data/research.json 200
+/data/catalog.json 200  /build-manifest.json 200
 
-```bash
-gh pr merge 9 --squash --delete-branch
-gh run list --workflow=pages.yml --limit 3          # 核实 build 与 deploy 两个 job 的真实结果
+# 线上产物确实来自本次合并提交：
+build-manifest.json -> repository_ref = 3375af2af1f8c68658d606b709326df7f439bfcb
+                       playable_published = 0
+                       repository_snapshots_published = []
+                       preview_unapproved = false
+
+# 线上真实 Chromium 点击验证：
+external target = _blank   |   internal target = None
+tabs opened after clicking internal link = 0        → 就地导航
+url = .../awsome-games/research.html?kind=repositories&id=0xCodez%2Fthousand-peaks
+detail dialog open = True  |  detail title = "Dragon of a Thousand Peaks"
+page errors = []（三个页面均为 0）
+live research stats = 1,118 / 907 / 64 / 83 / 12   |   live index stats = 155 / 54 / 59 / 0
 ```
 
-合并后必须区分"build 成功"与"deploy 成功"，并单独核实线上页面可访问性。
+**未发布任何第三方源码**：`repository_snapshots_published: []`、`playable_published: 0`。
+
+> **测试质量教训（已修正）**：PR #9 的 E2E 测试用 `page.goto(href)` 直接跟随链接，**没有真正点击**，因此没能发现 `target="_blank"` 的缺陷。该缺陷是在对**线上部署真实点击**时才暴露的。PR #10 已把测试改为真实 `click()`，并新增“内部链接不得强制开新标签页”的源码契约；两个测试在合并前的旧代码上均**先失败**（`AssertionError: '_blank' is not None`），修复后通过。教训：溯源类测试必须用真实用户手势，不能用直接导航代替。
 
 ---
 
@@ -250,6 +294,7 @@ gh run list --workflow=pages.yml --limit 3          # 核实 build 与 deploy �
 | 中 | Review Queue 无 CSV 导出；无跨实体双向导航 | `site/review.html` 无导出按钮 | M5 增强 | #8 |
 | 低 | 无全设备视觉验收与无障碍 E2E | 无移动端截图证据 | 增加移动端/键盘可达性测试并归档截图 | #8 |
 | 低 | `.github/workflows/pages.yml` 的重试/失败恢复策略未实测 | 仅静态阅读 | 合并后观察真实 job 结果 | #7 |
+| 低 | 溯源类 E2E 曾用 `page.goto()` 代替真实用户手势，导致漏检 `target="_blank"` | PR #9 的测试 vs PR #10 的修正 | 已修复（#10 改为真实 `click()`）；后续所有导航类测试一律用真实手势 | #8 |
 
 ---
 
