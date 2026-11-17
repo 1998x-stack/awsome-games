@@ -292,6 +292,10 @@ def ingest(conn: sqlite3.Connection) -> dict:
                 if norm_title(r["title"])==norm_title(w["title"]):
                     conn.execute("INSERT OR IGNORE INTO research_project_links VALUES (?,?,?)",
                                  (r["project_id"],w["work_id"],"EXACT_REPO_AND_TITLE"))
+    from review_evidence import apply_manifest
+    review_file=ROOT / "config" / "research_reviews.json"
+    if review_file.is_file():
+        apply_manifest(conn,review_file)
     return counts(conn)
 
 def counts(conn: sqlite3.Connection) -> dict:
