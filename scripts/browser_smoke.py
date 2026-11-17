@@ -14,13 +14,15 @@ from datetime import datetime, timezone
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote, unquote
 
 FRAME_SANDBOX = "allow-scripts allow-pointer-lock allow-forms allow-modals"
 
 def clean_entry(root: Path, entry: str) -> Path:
     if not entry or entry.startswith("/") or "\\" in entry or "?" in entry or "#" in entry:
         raise ValueError("entry must be a repository-relative HTML path")
+    if any(x in entry for x in ('<','>','"',"'",'&','%')) or any(ord(c)<32 for c in entry):
+        raise ValueError("unsafe entry characters")
     parts=Path(entry).parts
     if any(x in (".","..","") for x in parts) or not entry.lower().endswith((".htm",".html")):
         raise ValueError("unsafe entry path")
@@ -37,11 +39,15 @@ def smoke(root: Path, entry: str, screenshot: Path | None=None, timeout_ms: int=
     class Handler(SimpleHTTPRequestHandler):
         def __init__(self,*args,**kwargs):
             super().__init__(*args,directory=str(root),**kwargs)
+        def translate_path(self,path):
+            target=Path(super().translate_path(path)).resolve()
+            if not target.is_relative_to(root):return str(root/'__denied__')
+            return str(target)
         def do_GET(self):
             if self.path.split("?",1)[0]=="/__isolated_smoke_host__":
                 payload=('<html><head><meta charset="utf-8"><title>Isolated test host</title></head>'
                          '<body><h1>Smoke test</h1><iframe title="third party" sandbox="'
-                         +FRAME_SANDBOX+'" referrerpolicy="no-referrer" src="/'+entry+'"></iframe></body></html>').encode()
+                         +FRAME_SANDBOX+'" referrerpolicy="no-referrer" src="/'+quote(entry,safe='/')+'"></iframe></body></html>').encode()
                 self.send_response(200);self.send_header("Content-Type","text/html;charset=utf-8")
                 self.send_header("Content-Length",str(len(payload)));self.end_headers();self.wfile.write(payload)
             else:super().do_GET()
