@@ -25,7 +25,9 @@ def make_index(records: list[dict]) -> dict[str,dict]:
     for rec in records:
         if not isinstance(rec,dict):
             raise ValueError("Invalid upstream metadata row")
-        key=str(rec.get("source") or "")+":"+str(rec.get("source_id") or "")
+        src=rec.get("source")
+        ident=rec.get("source_id")
+        key=str(src if src is not None else "")+":"+str(ident if ident is not None else "")
         if key in index or key.startswith(":") or key.endswith(":"):
             raise ValueError("Duplicate or missing metadata source ID: "+key)
         index[key]={field:rec.get(field) for field in SCALAR_FIELDS}

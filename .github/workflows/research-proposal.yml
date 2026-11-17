@@ -52,7 +52,8 @@ jobs:
             exit 0
           fi
           git commit -m "chore(research): propose unverified source metadata drift"
-          git -c http.extraheader="AUTHORIZATION: bearer ${GH_TOKEN}" push origin "HEAD:refs/heads/$BRANCH"
+          gh auth setup-git
+          git push origin "HEAD:refs/heads/$BRANCH"
           gh pr create --draft --base main --head "$BRANCH" \
             --title "chore(research): review source metadata drift ${SHA}" \
             --body "Automated DRAFT proposal of metadata differences only. Review source identities, safety and evidence manually. No source/entity snapshot promotion, third-party code execution, publication or APPROVED adjudication. To apply accepted changes, use a distinct reviewed PR."
