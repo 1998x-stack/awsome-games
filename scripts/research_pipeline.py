@@ -86,7 +86,10 @@ REVIEWED_ENTRIES = {
 REVIEWED_ENTRIES = {(r.lower(), t.casefold()): p for (r,t),p in REVIEWED_ENTRIES.items()}
 
 def read(name: str) -> dict:
-    obj = json.loads((DATA / name).read_text(encoding="utf-8"))
+    # Dynamic updates are separate from the immutable v1 investigation snapshot.
+    current = ROOT / "data" / "research" / "current" / name
+    path = current if name in ("sources.json", "entities.json") and current.is_file() else DATA / name
+    obj = json.loads(path.read_text(encoding="utf-8"))
     if obj.get("schema_version") != 1 or not isinstance(obj.get("records"), list):
         raise ValueError(f"Invalid research snapshot: {name}")
     return obj
