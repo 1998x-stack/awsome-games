@@ -28,7 +28,8 @@ class ReviewTests(unittest.TestCase):
     def test_dryrun_apply_reimport_are_idempotent(self):
         payload={"schema_version":1,"works":[{
             "work_id":"F52-W001","review_status":"APPROVED",
-            "evidence_url":"https://github.com/example/primary-evidence",
+            "evidence_url":"https://github.com/Rikinshah787/Game-Fable-5.2/blob/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/README.md",
+            "primary_evidence_kind":"PINNED_SOURCE_REPOSITORY","reviewer":"test-reviewer",
             "entry_path":"game/index.html","model_evidence":"PRIMARY_AUTHOR_DOCUMENTED",
             "reviewer_note":"Exact file tree verified"
         }],"posts":[]}
@@ -49,6 +50,8 @@ class ReviewTests(unittest.TestCase):
     def test_unsafe_review_entry_rejected(self):
         payload={"schema_version":1,"works":[{"work_id":"F52-W001",
             "review_status":"APPROVED","evidence_url":"https://example.com/evidence",
+            "primary_evidence_kind":"PINNED_SOURCE_REPOSITORY","reviewer":"test-reviewer",
+            "reviewer_note":"fixture",
             "entry_path":"../../outside.html"}],"posts":[]}
         with self.assertRaisesRegex(ValueError,"entry"):
             validate_manifest(payload)
@@ -66,9 +69,29 @@ class ReviewTests(unittest.TestCase):
         self.assertNotEqual(work["entry_path"],"unverified.html")
         self.assertEqual(work["review_status"],"UNREVIEWED")
 
+    def test_https_alone_does_not_establish_original_provenance(self):
+        payload={"schema_version":1,"works":[{"work_id":"F52-W001",
+            "review_status":"APPROVED","evidence_url":"https://example.com/unrelated",
+            "primary_evidence_kind":"PINNED_SOURCE_REPOSITORY","reviewer":"analyst",
+            "reviewer_note":"Source appears plausible"}],"posts":[]}
+        with self.assertRaisesRegex(ValueError,"not bound"):
+            apply_manifest(self.conn,self.write(payload))
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM research_work_reviews").fetchone()[0],0)
+
+    def test_unreviewed_draft_cannot_upgrade_fields(self):
+        payload={"schema_version":1,"works":[{"work_id":"F52-W001",
+            "review_status":"DRAFT","evidence_url":"https://example.com/unverified",
+            "entry_status":"BROWSER_LOAD_CHECKED"}],"posts":[]}
+        self.assertEqual(apply_manifest(self.conn,self.write(payload))["written"],1)
+        obj=next(x for x in export_projection(self.conn)["works"] if x["work_id"]=="F52-W001")
+        self.assertEqual(obj["review_status"],"UNREVIEWED")
+        self.assertFalse(obj["execution_verified"])
+
     def test_unknown_work_rejected_without_writes(self):
         payload={"schema_version":1,"works":[{"work_id":"ABSENT",
-            "review_status":"APPROVED","evidence_url":"https://example.com/primary"}],"posts":[]}
+            "review_status":"APPROVED","evidence_url":"https://example.com/primary",
+            "primary_evidence_kind":"PINNED_SOURCE_REPOSITORY","reviewer":"test-reviewer",
+            "reviewer_note":"test fixture"}],"posts":[]}
         with self.assertRaisesRegex(ValueError,"unknown work"):
             apply_manifest(self.conn,self.write(payload))
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM research_work_reviews").fetchone()[0],0)

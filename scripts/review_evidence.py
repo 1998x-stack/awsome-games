@@ -18,6 +18,9 @@ from db import ROOT, DB_PATH
 
 DEFAULT = ROOT / "config" / "research_reviews.json"
 ALLOWED_STATUS = {"APPROVED", "DRAFT", "REJECTED"}
+PRIMARY_EVIDENCE_KINDS = {"PINNED_SOURCE_REPOSITORY", "ORIGINAL_AUTHOR_POST"}
+# This only proves the URL is tied to the indexed entity, not that an author's
+# contested model claim is objectively true. Human review remains necessary.
 WORK_FIELDS = {"entry_path","entry_status","prompt_status","human_contribution",
                "human_status","model_evidence","external_dependencies","reviewer_note"}
 POST_FIELDS = {"work_id","entity_id","confidence","reviewer_note"}
@@ -43,6 +46,62 @@ def safe_evidence_url(value):
     except ValueError as exc:
         raise ValueError("Invalid review evidence URL") from exc
     return value
+
+
+def assert_primary_source_binding(conn, kind, item, evidence):
+    """Reject unrelated HTTPS pages as the basis for APPROVED field overrides.
+
+    Pinned GitHub blob URLs are source-code evidence, not automatically model
+    authorship evidence. Original X posts use the *exact* indexed status path.
+    """
+    if item["review_status"] != "APPROVED":
+        return
+    url = urlsplit(evidence)
+    hostname = (url.hostname or "").lower()
+    path = url.path.rstrip("/")
+    source_kind = item["primary_evidence_kind"]
+    if source_kind == "ORIGINAL_AUTHOR_POST":
+        if kind == "post":
+            original = conn.execute("SELECT post_url FROM research_posts WHERE post_key=?",
+                                    (item["post_key"],)).fetchone()
+            original = original[0] if original else ""
+            p = urlsplit(original)
+            if (hostname in ("x.com", "twitter.com") and
+                (p.hostname or "").lower() in ("x.com", "twitter.com") and
+                p.path.rstrip("/") == path and
+                re.search(r"/status/[0-9]+$",path)):
+                return
+        else:
+            linked = conn.execute("SELECT post_url FROM research_posts WHERE work_id=?",
+                                  (item["work_id"],)).fetchall()
+            if hostname in ("x.com","twitter.com") and any(
+                urlsplit(x[0] or "").path.rstrip("/") == path and
+                re.search(r"/status/[0-9]+$",path) for x in linked):
+                return
+    if source_kind == "PINNED_SOURCE_REPOSITORY" and hostname == "github.com":
+        if kind == "work":
+            row = conn.execute("SELECT repository_full_name FROM research_works WHERE work_id=?",
+                               (item["work_id"],)).fetchone()
+            repo = (row[0] if row else "") or ""
+            # Exact repo identity + immutable 40-hex commit and a file path.
+            pattern = r"/" + re.escape(repo) + r"/blob/[0-9a-fA-F]{40}/[^/].+"
+            if repo and re.fullmatch(pattern,path,re.I):
+                return
+        else:
+            row = conn.execute("SELECT repo_urls FROM research_posts WHERE post_key=?",
+                               (item["post_key"],)).fetchone()
+            try:
+                repos = json.loads(row[0] or "[]") if row else []
+            except (TypeError,ValueError):
+                repos = []
+            for candidate in repos:
+                p = urlsplit(candidate)
+                if (p.hostname or "").lower() != "github.com":
+                    continue
+                repo_path = "/".join(p.path.strip("/").split("/")[:2])
+                if re.fullmatch("/"+re.escape(repo_path)+r"/blob/[0-9a-fA-F]{40}/[^/].+",path,re.I):
+                    return
+    raise ValueError("APPROVED evidence URL is not bound to an original post or pinned source repository")
 
 
 def safe_entry_path(value):
@@ -74,7 +133,13 @@ def validate_manifest(raw):
             evidence=safe_evidence_url(item.get("evidence_url"))
             if status=="APPROVED" and not evidence:
                 raise ValueError("Approved review requires an HTTPS evidence URL")
-            unexpected=set(item)-({identity,"review_status","evidence_url","reviewed_at"}|allowed)
+            if status=="APPROVED" and (
+                    item.get("primary_evidence_kind") not in PRIMARY_EVIDENCE_KINDS
+                    or not isinstance(item.get("reviewer"),str) or not item["reviewer"].strip()
+                    or not isinstance(item.get("reviewer_note"),str) or not item["reviewer_note"].strip()):
+                raise ValueError("APPROVED requires explicit primary_evidence_kind, reviewer and reviewer_note")
+            unexpected=set(item)-({identity,"review_status","evidence_url","reviewed_at",
+                                   "primary_evidence_kind","reviewer"}|allowed)
             if unexpected:raise ValueError("Unknown fields in review manifest: "+",".join(sorted(unexpected)))
             key=(kind,item[identity])
             if key in seen:raise ValueError("Duplicate review entry: "+str(key))
@@ -98,6 +163,7 @@ def apply_manifest(conn: sqlite3.Connection, manifest: Path = DEFAULT, dry_run=F
         if kind=="post" and item.get("work_id") and not conn.execute(
             "SELECT 1 FROM research_works WHERE work_id=?",(item["work_id"],)).fetchone():
             raise ValueError("Review refers to an unknown work_id")
+        assert_primary_source_binding(conn,kind,item,item.get("evidence_url",""))
     if dry_run:return {"review_entries":len(prepared),"written":0}
     conn.executescript(SCHEMA)
     changed=0
@@ -112,7 +178,18 @@ def apply_manifest(conn: sqlite3.Connection, manifest: Path = DEFAULT, dry_run=F
             desired[key]=item[key]
             desired["review_status"]=item["review_status"]
             desired["evidence_url"]=evidence or prev.get("evidence_url") or ""
-            if existing and all(prev.get(k)==v for k,v in desired.items()):
+            # Reviewer/source-kind changes are meaningful provenance edits even
+            # when the materialised review row remains otherwise unchanged.
+            meta={"reviewer":item.get("reviewer") or "",
+                  "primary_evidence_kind":item.get("primary_evidence_kind") or ""}
+            last=conn.execute("""SELECT review_json FROM research_review_history
+                WHERE entity_type=? AND entity_key=? ORDER BY id DESC LIMIT 1""",
+                (kind,item[key])).fetchone()
+            previous_meta={}
+            if last:
+                try: previous_meta=json.loads(last[0]).get("_source_review_meta",{})
+                except (ValueError,TypeError): previous_meta={}
+            if existing and all(prev.get(k)==v for k,v in desired.items()) and previous_meta==meta:
                 continue
             when=datetime.now(timezone.utc).replace(microsecond=0).isoformat()
             desired["reviewed_at"]=item.get("reviewed_at") or when
@@ -125,7 +202,7 @@ def apply_manifest(conn: sqlite3.Connection, manifest: Path = DEFAULT, dry_run=F
             conn.execute("""INSERT INTO research_review_history
                 (entity_type,entity_key,review_json,evidence_url,applied_at)
                 VALUES(?,?,?,?,?)""",
-                (kind,item[key],json.dumps(desired,ensure_ascii=False,sort_keys=True),
+                (kind,item[key],json.dumps(dict(desired,_source_review_meta=meta),ensure_ascii=False,sort_keys=True),
                  desired["evidence_url"],when))
             changed+=1
     return {"review_entries":len(prepared),"written":changed}
