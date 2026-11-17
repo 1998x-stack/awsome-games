@@ -48,3 +48,23 @@ erDiagram
 ## 初始数据快照
 
 `data/seeds/games_52.tsv`、`games_51.tsv` 和 `mia_html_52.txt` 是可复现的紧凑种子清单；结合 5 个重点作品和 2 个额外单文件游戏，可重建首批 155 条作品。首轮导入后得到 54 个去重仓库、150 条作品-仓库关系。重复仓库只克隆一次，合集仓库里的多个作品仍是多条项目记录。
+
+## 研究层表结构（2026-11-17）
+
+基线表 projects、repositories、project_repositories 不重建、不自动提升社区模型声明。新增表的分工：
+
+| 研究表 | 粒度与职责 |
+|---|---|
+| research_source_records | 按 (source, source_id) 保存当前来源快照；只计当前版本，不把旧删除数据算作新增 |
+| research_posts | 精确 X status ID 作为帖子身份；缺失 ID 使用孤儿键；不等于独立游戏 |
+| research_repositories | 83个 GitHub 候选仓库及与原创/镜像/工具/PR 的关系 |
+| research_works | 64个作品工程映射、源码入口、Prompt/外部资源/人工贡献的源声明 |
+| research_claims | 反证与模型归属冲突 |
+| research_project_links | 旧目录到研究主表的保守精确映射，允许保留人工设置的关系 |
+| research_work_reviews | APPROVED/DRAFT/REJECTED 的作品人工审核字段，独立于来源快照 |
+| research_post_reviews | APPROVED/DRAFT/REJECTED 的原帖归并审核 |
+| research_review_history | 只追加审核变更时间和依据，重复审核内容不制造伪新历史 |
+| research_ingest_meta | 当前已经入库的来源快照 capture date |
+| research_browser_runs | 将来真正浏览器实测的日志；空白不是已通过 |
+
+一个 Work 可以关联多个来源帖；一个 GitHub 仓库也可能对应多款不同作品；同名和同仓库绝不能自动推断唯一作品。人工审核必须有直接证据 URL，不能修改来源冻结 JSON 再冒称作者事实。active manifest 的 SHA-256 对 sources/entities 两文件一起做内容校验，详见 RESEARCH_INTEGRATION.md。
