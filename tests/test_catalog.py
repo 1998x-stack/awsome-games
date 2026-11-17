@@ -19,6 +19,22 @@ class CatalogTests(unittest.TestCase):
             self.assertEqual(conn.execute('PRAGMA integrity_check').fetchone()[0],'ok')
             self.assertEqual(conn.execute('PRAGMA foreign_key_check').fetchall(),[])
             conn.close()
+    def test_author_reviewed_model_survives_seed_reload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            conn=connect(Path(tmp)/'catalog.sqlite')
+            seed_database(conn, SEED_PATH)
+            original=conn.execute("SELECT id,model_claim,model_version FROM projects LIMIT 1").fetchone()
+            conn.execute("UPDATE projects SET model_claim=?,model_version=?,model_confidence=? WHERE id=?",
+                         ("AUTHOR_CONFIRMED_OPUS_5_5","5.5","author_documentation",original["id"]))
+            conn.commit()
+            seed_database(conn, SEED_PATH)
+            row=conn.execute("SELECT model_claim,model_version,model_confidence FROM projects WHERE id=?",
+                             (original["id"],)).fetchone()
+            self.assertEqual(row["model_claim"],"AUTHOR_CONFIRMED_OPUS_5_5")
+            self.assertEqual(row["model_version"],"5.5")
+            self.assertEqual(row["model_confidence"],"author_documentation")
+            conn.close()
+
     def test_classification(self):
         self.assertEqual(classify('FPS'),'fps')
         self.assertEqual(classify('RTS'),'strategy')
