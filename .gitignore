@@ -19,7 +19,14 @@ data/raw/
 data/fable_projects.sqlite
 data/catalog.sqlite-shm
 data/catalog.sqlite-wal
-# Generated Pages artifact; games/_repos is intentionally versioned after collection
+# Local collection output. Only publication-approved repositories are tracked:
+# un-ignore a repository here once it is listed in config/publication_approvals.json
+# and its SPDX metadata and bundled-asset rights have been reviewed. Everything
+# else stays local so unreviewed third-party code is never committed or deployed.
+games/_repos/*
+!games/_repos/Time-dev-alt__Fable-5.1-Games/
+
+# Generated Pages artifact
 site/data/
 site/games/
 site/build-manifest.json

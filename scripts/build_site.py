@@ -37,6 +37,23 @@ SENSITIVE_SUFFIXES = {".pem", ".key", ".p12", ".pfx"}
 EXCLUDED_DIRS = {".git", ".cache", "node_modules", ".next", ".venv",
                  "venv", "__pycache__", "test-results"}
 
+# Redistributing MIT/BSD/Apache-licensed code requires shipping its notice.
+# These basenames are the only extensionless (or unusual-extension) files allowed
+# through, so attribution survives publication without opening a general bypass.
+ATTRIBUTION_NAMES = {
+    "license", "license.md", "license.txt", "license-mit", "license-mit.txt",
+    "licence", "licence.md", "licence.txt",
+    "copying", "copying.md", "copying.txt",
+    "notice", "notice.md", "notice.txt",
+    "third_party_notices", "third_party_notices.md", "third_party_notices.txt",
+    "attributions", "attributions.md", "attributions.txt",
+}
+
+
+def is_attribution(path: Path) -> bool:
+    """True only for copyright/licence notice files that must travel with the code."""
+    return path.name.casefold() in ATTRIBUTION_NAMES
+
 
 def publishable_repositories(config_path=None):
     config_path = config_path or APPROVALS
@@ -78,7 +95,7 @@ def copy_approved_assets(source: Path, target: Path, max_bytes: int) -> int:
             continue
         if not item.is_file():
             raise RuntimeError("nonregular file in snapshot: " + str(rel))
-        if item.suffix.casefold() not in ALLOWED_ASSETS:
+        if item.suffix.casefold() not in ALLOWED_ASSETS and not is_attribution(rel):
             continue
         bytes_ = item.stat().st_size
         if bytes_ < 0 or size + bytes_ > max_bytes:

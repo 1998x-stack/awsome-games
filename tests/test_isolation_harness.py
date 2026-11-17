@@ -53,3 +53,39 @@ class IsolationHarnessContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GameplayHarnessContractTests(unittest.TestCase):
+    """The interaction probe and the dependency policy are safety-relevant contracts."""
+
+    def test_wrapper_supports_both_modes(self):
+        w = WRAPPER.read_text(encoding="utf-8")
+        self.assertIn("--mode", w)
+        self.assertIn("browser_gameplay_probe.py", w)
+        self.assertIn("browser_smoke.py", w)
+
+    def test_image_contains_the_interaction_probe(self):
+        d = DOCKERFILE.read_text(encoding="utf-8")
+        self.assertIn("browser_gameplay_probe.py", d)
+
+    def test_cosmetic_dependencies_are_stubbed_not_allowed_through(self):
+        import sys
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from browser_smoke import is_cosmetic_request
+        self.assertTrue(is_cosmetic_request("https://fonts.googleapis.com/css2?family=Anton"))
+        self.assertTrue(is_cosmetic_request("https://fonts.gstatic.com/s/anton/v1/x.woff2"))
+        self.assertTrue(is_cosmetic_request("https://example.com/favicon.ico"))
+        for functional in ("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js",
+                           "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                           "https://example.com/api/state", "wss://example.com/socket"):
+            self.assertFalse(is_cosmetic_request(functional), functional)
+
+    def test_gameplay_probe_refuses_to_pass_without_an_input_driven_change(self):
+        src = (ROOT / "scripts/browser_gameplay_probe.py").read_text(encoding="utf-8")
+        self.assertIn('"INPUT_RESPONSIVE"', src)
+        self.assertIn('"NO_OBSERVABLE_RESPONSE"', src)
+        self.assertIn("input_changed_pixels", src)
+        self.assertIn("gameplay_verified", src)
+        agg = (ROOT / "scripts/build_runtime_evidence.py").read_text(encoding="utf-8")
+        self.assertIn("verification_rejected", agg)
+        self.assertIn("record[\"gameplay_verified\"] = not record_problems", agg)

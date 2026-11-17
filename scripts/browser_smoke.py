@@ -18,6 +18,59 @@ from urllib.parse import urlparse, quote, unquote
 
 FRAME_SANDBOX = "allow-scripts allow-pointer-lock allow-forms allow-modals"
 
+# Web fonts and favicons are styling-only: a page can be meaningfully load-checked
+# without them. They are satisfied with a local empty response so no external
+# egress happens, and they are recorded separately instead of failing the run.
+# Everything else (scripts, fetch/XHR, media, wasm, WebSocket) stays functional
+# and fails closed.
+COSMETIC_HOSTS = {
+    "fonts.googleapis.com", "fonts.gstatic.com", "use.typekit.net",
+    "fonts.bunny.net", "cdnjs.cloudflare.com/cosmetic-placeholder",
+}
+COSMETIC_STUB_CSS = "/* web font stubbed locally by the isolation policy */\n"
+
+
+def is_cosmetic_request(url: str) -> bool:
+    """True only for non-functional styling requests (web fonts, favicons)."""
+    try:
+        parsed = urlparse(url or "")
+    except (ValueError, TypeError):
+        return False
+    host = (parsed.hostname or "").lower()
+    if host in COSMETIC_HOSTS:
+        return True
+    return parsed.path.lower().endswith(("/favicon.ico", "apple-touch-icon.png"))
+
+
+def install_network_policy(context, result: dict, allowed_port: int) -> None:
+    """Deny every off-loopback request while keeping cosmetic ones non-fatal.
+
+    """
+    def secure_route(route):
+        parsed = urlparse(route.request.url)
+        if (parsed.scheme == "http" and parsed.hostname in ("127.0.0.1", "localhost")
+                and parsed.port == allowed_port):
+            return route.continue_()
+        if is_cosmetic_request(route.request.url):
+            result.setdefault("stubbed_cosmetic_requests", []).append(route.request.url)
+            if parsed.path.lower().endswith(".ico"):
+                return route.fulfill(status=204, body="")
+            return route.fulfill(status=200, content_type="text/css", body=COSMETIC_STUB_CSS)
+        result["blocked_requests"].append(route.request.url)
+        return route.abort()
+
+    context.route("**/*", secure_route)
+    # HTTP request interception does not intercept WebSocket handshakes.
+    # Fail closed on old Playwright rather than silently allowing egress.
+    if not hasattr(context, "route_web_socket"):
+        raise RuntimeError("Playwright >= 1.48 is required for WebSocket isolation")
+
+    def close_websocket(ws):
+        result["blocked_websockets"].append(ws.url)
+        ws.close()
+
+    context.route_web_socket("**/*", close_websocket)
+
 def clean_entry(root: Path, entry: str) -> Path:
     if not entry or entry.startswith("/") or "\\" in entry or "?" in entry or "#" in entry:
         raise ValueError("entry must be a repository-relative HTML path")
@@ -59,7 +112,8 @@ def smoke(root: Path, entry: str, screenshot: Path | None=None, timeout_ms: int=
     port=server.server_address[1]
     result={"tested_at":datetime.now(timezone.utc).isoformat(),"entry":entry,"status":"NOT_RUN",
             "iframe_isolation":False,"frame_body_loaded":False,"console_errors":[],
-            "blocked_requests":[],"blocked_websockets":[],"failed_requests":[],"http_errors":[],"screenshot":None,
+            "blocked_requests":[],"blocked_websockets":[],"stubbed_cosmetic_requests":[],
+            "failed_requests":[],"http_errors":[],"screenshot":None,
             "gameplay_verified":False,"network_policy":"browser-level loopback-only HTTP; websocket denied; OS network namespace still required"}
     browser=None
     try:
@@ -70,22 +124,7 @@ def smoke(root: Path, entry: str, screenshot: Path | None=None, timeout_ms: int=
             browser=p.chromium.launch(**launch)
             ctx=browser.new_context(accept_downloads=False,service_workers="block",permissions=[],
                                      java_script_enabled=True,ignore_https_errors=False)
-            def secure_route(route):
-                u=urlparse(route.request.url)
-                if u.scheme=="http" and u.hostname in ("127.0.0.1","localhost") and u.port==port:
-                    route.continue_()
-                else:
-                    result["blocked_requests"].append(route.request.url)
-                    route.abort()
-            ctx.route("**/*",secure_route)
-            # HTTP request interception does not intercept WebSocket handshakes.
-            # Fail closed on old Playwright rather than silently allowing egress.
-            if not hasattr(ctx,"route_web_socket"):
-                raise RuntimeError("Playwright >= 1.48 is required for WebSocket isolation")
-            def close_websocket(ws):
-                result["blocked_websockets"].append(ws.url)
-                ws.close()
-            ctx.route_web_socket("**/*",close_websocket)
+            install_network_policy(ctx,result,port)
             page=ctx.new_page()
             page.on("console",lambda msg: result["console_errors"].append(msg.text) if msg.type=="error" else None)
             page.on("pageerror",lambda ex:result["console_errors"].append(str(ex)))

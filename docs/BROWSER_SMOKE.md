@@ -63,3 +63,54 @@ Official API: https://playwright.dev/python/docs/api/class-browsercontext#browse
 
 自报浏览器报告无法被冒用：`scripts/import_browser_report.py` 只接受与 `research_works.entry_path`（已人工审阅的入口）完全一致的 staged 文件，并锁定 40 位 commit SHA。用自编 fixture 去冒领真实 work_id 会被拒绝，`research_runtime_evidence` 保持 0 行。
 
+
+
+## 交互实测与依赖分级（2026-11-17 新增）
+
+### 两级结论，必须分开
+
+| 层级 | 工具 | 含义 |
+|---|---|---|
+| 加载 | `scripts/browser_smoke.py`（`--mode smoke`） | `BROWSER_LOAD_CHECKED`：body 加载、iframe 隔离成立、无功能性阻断 |
+| 交互 | `scripts/browser_gameplay_probe.py`（`--mode gameplay`） | `INPUT_RESPONSIVE`：注入 15 个真实指针/键盘手势后，**渲染输出发生变化** |
+
+`INPUT_RESPONSIVE` **不等于**游戏正确、完整或可玩得好；它只证明"有东西在监听输入并作出反应"。刻意不提供比这更强的自动结论。
+
+探针的判据（全部记录哈希，不写散文）：
+
+1. 载入后先静置取样 → `initial_pixels`、`initial_dom`；
+2. 再静置 `--idle-ms` → `idle_pixels`（区分"持续动画"与"响应输入"）；
+3. 注入手势：鼠标移动到中心、4 次点击、10 个按键（方向键/WASD/Space/Enter）→ `after_input_pixels`；
+4. 只有 `after_input_pixels != idle_pixels`（或 DOM 指纹变化）且**无控制台错误、无功能性阻断、iframe 隔离成立**时才判定通过。
+
+自检对照（自编写 fixture，非第三方）：会响应输入的页面 → `INPUT_RESPONSIVE`；完全静态的页面 → `NO_OBSERVABLE_RESPONSE`；会抛错的页面 → `INCOMPLETE_OR_FAILED`。
+
+### 依赖分级：字体/图标不上纲上线，功能性依赖仍 fail closed
+
+`browser_smoke.py` 的 `is_cosmetic_request()` 把 **web 字体与 favicon** 视为样式性依赖，用一个**本地空响应**满足它们（`stubbed_cosmetic_requests`），因此：
+
+* **零外联仍然成立**——不是放行，而是本地 stub；
+* 只缺字体不再被误判为"运行失败"，因为字体几乎从来不是功能前提；
+* 脚本、`fetch`/XHR、媒体、wasm、WebSocket 一律仍是**功能性**依赖，被阻断即 fail closed。
+
+### 命令
+
+    # 加载检查
+    bash scripts/isolation/run_isolated_smoke.sh --root .cache/isolated-stage/<x> \
+      --entry index.html --out .cache/iso-out
+
+    # 交互实测
+    bash scripts/isolation/run_isolated_smoke.sh --mode gameplay --root .cache/isolated-stage/<x> \
+      --entry index.html --out .cache/iso-out --screenshot shot.png
+
+    # 聚合成可复核证据（fail-closed 校验）
+    python3 scripts/build_runtime_evidence.py --out data/reports/runtime-evidence.json \
+      --capture '{"repo":"o/n","commit":"<40hex>","entry":"index.html","probe":"gameplay","report":".../gameplay.json"}'
+
+### 已知的沙箱不兼容类别（实测发现）
+
+站点 iframe 沙箱**必须**不含 `allow-same-origin`，因此任何在初始化阶段访问
+`localStorage` / `sessionStorage` / `IndexedDB` 的产物都会抛
+`SecurityError: The document is sandboxed and lacks the 'allow-same-origin' flag` 而无法运行。
+实测样本 `Time-dev-alt/Fable-5.1-Games@ddfba6c4` 的 `shooter.html` 即属此类，已记为
+`playable_status=sandbox_incompatible` 且不参与发布。**不要为了让它运行而放开同源权限。**

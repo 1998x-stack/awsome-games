@@ -320,3 +320,74 @@ class SeedReproducibilityTests(unittest.TestCase):
 
 
 if __name__=='__main__': unittest.main()
+
+
+class AttributionPublicationTests(unittest.TestCase):
+    """MIT/BSD/Apache notices must travel with approved code, nothing else may sneak in."""
+
+    def _publish(self, extra):
+        with tempfile.TemporaryDirectory() as tmp:
+            base=Path(tmp); src=base/'snap/example__game'; src.mkdir(parents=True)
+            (src/'index.html').write_text('<!doctype html><title>game</title>')
+            for name,body in extra.items():
+                target=src/name; target.parent.mkdir(parents=True,exist_ok=True)
+                target.write_text(body)
+            dest=base/'out'; dest.mkdir()
+            publisher.copy_approved_assets(src,dest,10_000_000)
+            return sorted(p.relative_to(dest).as_posix() for p in dest.rglob('*') if p.is_file())
+
+    def test_licence_and_notice_files_are_published(self):
+        files=self._publish({'LICENSE':'MIT License\nCopyright (c) 2026 TimeDev',
+                             'NOTICE':'notice','THIRD_PARTY_NOTICES.md':'third party'})
+        self.assertIn('LICENSE',files)
+        self.assertIn('NOTICE',files)
+        self.assertIn('THIRD_PARTY_NOTICES.md',files)
+        self.assertIn('index.html',files)
+
+    def test_attribution_allowlist_is_not_a_general_bypass(self):
+        files=self._publish({'Makefile':'all:','run.sh':'echo hi','LICENSE-UNKNOWN-JUNK':'x',
+                             '.env':'SECRET=1','credentials.json':'{"token":"x"}','bin/game':'ELF'})
+        for leaked in ('Makefile','run.sh','LICENSE-UNKNOWN-JUNK','.env','credentials.json','bin/game'):
+            self.assertNotIn(leaked,files,leaked)
+
+
+class RuntimeReviewedStatusTests(unittest.TestCase):
+    """A status measured by isolated runtime testing must survive re-collection."""
+
+    def test_runtime_reviewed_status_is_not_overwritten_by_recollection(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            base=Path(tmp)
+            (base/'site').mkdir()
+            (base/'games/_repos/example__game').mkdir(parents=True)
+            (base/'games/_repos/example__game/index.html').write_text('<!doctype html><title>g</title>')
+            (base/'config').mkdir()
+            (base/'config/publication_approvals.json').write_text(json.dumps({'approved_repositories':[]}))
+            from db import connect, now
+            conn=connect(base/'catalog.sqlite')
+            conn.execute("INSERT INTO projects(id,slug,title,created_at,updated_at) VALUES('p','p','Sample',?,?)",(now(),now()))
+            conn.execute("""INSERT INTO repositories(full_name,owner,name,html_url,clone_url,clone_status,clone_path,commit_sha)
+                            VALUES('example/game','example','game','https://github.com/example/game',
+                                   'https://github.com/example/game.git','cloned',?,'old')""",(str(base/'snap'),))
+            rid=conn.execute("SELECT id FROM repositories WHERE full_name='example/game'").fetchone()[0]
+            conn.execute("""INSERT INTO project_repositories(project_id,repository_id,entry_path,game_path,
+                              entry_confidence,playable_status,note) VALUES('p',?,'index.html',
+                              'games/_repos/example__game/index.html','unique_html','sandbox_incompatible',
+                              'localStorage threw: sandbox lacks allow-same-origin')""",(rid,))
+            conn.commit()
+            repo=base/'snap'; repo.mkdir()
+            (repo/'index.html').write_text('<!doctype html><title>g</title>')
+            row=conn.execute("SELECT * FROM repositories WHERE id=?",(rid,)).fetchone()
+            with patch.object(collector,'ROOT',base), \
+                 patch.object(collector,'DEST',base/'games/_repos'), \
+                 patch.object(collector,'clone_one',return_value=(repo,'new-sha','main')), \
+                 patch.object(collector,'tracked_files',return_value=['index.html']), \
+                 patch.object(collector,'api_metadata',return_value={}):
+                result=collector.process_repo(conn,None,row,None,False,True,10_000,100_000)
+            self.assertEqual(result['status'],'cloned')
+            kept=conn.execute("SELECT playable_status,note FROM project_repositories WHERE project_id='p' AND repository_id=?",(rid,)).fetchone()
+            self.assertEqual(kept['playable_status'],'sandbox_incompatible')
+            self.assertIn('allow-same-origin',kept['note'])
+            agg=conn.execute("SELECT playable_status FROM projects WHERE id='p'").fetchone()[0]
+            self.assertEqual(agg,'sandbox_incompatible')
+            conn.close()

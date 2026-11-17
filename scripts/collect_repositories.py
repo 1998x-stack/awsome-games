@@ -20,6 +20,12 @@ SKIP_DIRS = {'.git','node_modules','.next','.nuxt','.turbo','.cache','.venv','ve
 SECRET_NAMES = {'.env','.env.local','.env.production','.npmrc','.pypirc','id_rsa','id_ed25519','credentials.json','service-account.json'}
 SECRET_SUFFIXES = {'.pem','.key','.p12','.pfx'}
 
+# Statuses established by isolated runtime testing (not derived guesses).
+# Re-collecting must never silently turn an artifact that was measured as
+# incompatible back into a publishable one — same rule as the research layer,
+# where a source refresh may not overwrite a reviewed conclusion.
+RUNTIME_REVIEWED_STATUSES = {'sandbox_incompatible', 'runtime_verification_failed'}
+
 
 def run(cmd, cwd=None, timeout=600, check=True):
     p = subprocess.run(cmd, cwd=cwd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)
@@ -248,10 +254,14 @@ def process_repo(conn, run_id, repo_row, session, force, skip_api, max_file_byte
         for f in files:
             conn.execute('INSERT INTO repository_files(repository_id,relative_path,extension,mime_type,size_bytes,sha256,is_html_entry,copied) VALUES(?,?,?,?,?,?,?,1)',
               (repo_row['id'],f['path'],f['extension'],f['mime'],f['size'],f['sha256'],int(f['extension'] in ('.html','.htm'))))
-        mappings=conn.execute('''SELECT pr.project_id,pr.entry_path,p.slug,p.title,p.id FROM project_repositories pr JOIN projects p ON p.id=pr.project_id WHERE pr.repository_id=?''',(repo_row['id'],)).fetchall()
+        mappings=conn.execute('''SELECT pr.project_id,pr.entry_path,pr.game_path,pr.entry_confidence,pr.playable_status,pr.note,p.slug,p.title,p.id FROM project_repositories pr JOIN projects p ON p.id=pr.project_id WHERE pr.repository_id=?''',(repo_row['id'],)).fetchall()
         html_paths=[f['path'] for f in files if f['extension'] in ('.html','.htm')]
         selected=[]; mapping_count=len(mappings)
         for m in mappings:
+            if m['playable_status'] in RUNTIME_REVIEWED_STATUSES:
+                # Preserve the runtime finding and its evidence note verbatim.
+                selected.append((m['project_id'],m['entry_path'],m['game_path'],m['entry_confidence'],m['playable_status'],m['note']))
+                continue
             project={'id':m['project_id'],'slug':m['slug'],'title':m['title'],'entry_path':m['entry_path']}
             entry,confidence=choose_entry(project,html_paths,mapping_count)
             missing=missing_static_assets(dest,entry) if entry else []
@@ -272,6 +282,7 @@ def process_repo(conn, run_id, repo_row, session, force, skip_api, max_file_byte
             statuses=[x[0] for x in conn.execute('SELECT playable_status FROM project_repositories WHERE project_id=?',(pid,))]
             best=('smoke_test_passed' if 'smoke_test_passed' in statuses else
                   'entrypoint_found' if 'entrypoint_found' in statuses else
+                  'sandbox_incompatible' if 'sandbox_incompatible' in statuses else
                   'missing_assets' if 'missing_assets' in statuses else
                   'requires_build' if 'requires_build' in statuses else 'needs_review')
             conn.execute('UPDATE projects SET source_status=?,playable_status=?,updated_at=? WHERE id=?',('cloned',best,now(),pid))
