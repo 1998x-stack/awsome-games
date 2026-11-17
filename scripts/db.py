@@ -249,6 +249,8 @@ def parse_repo(full_name: str):
     bits = (full_name or "").strip().strip("/").split("/")
     if len(bits) != 2 or not all(bits): return None
     owner, name = bits
+    if not re.fullmatch(r'[A-Za-z0-9-]{1,39}', owner) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,100}', name) or name in ('.','..'):
+        return None
     return {"full_name": f"{owner}/{name}", "owner": owner, "name": name,
             "html_url": f"https://github.com/{owner}/{name}",
             "clone_url": f"https://github.com/{owner}/{name}.git"}
