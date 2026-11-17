@@ -13,6 +13,10 @@ class RefreshResearchTests(unittest.TestCase):
     def test_post_id_and_shapes(self):
         self.assertEqual(post_id("https://x.com/u/status/123456789?t=0"),"123456789")
         self.assertIsNone(post_id("https://example.org/hello"))
+        for malicious in ("https://evil.example/status/123","https://x.com.evil.example/a/status/123",
+                          "javascript:/status/123","https://user:secret@x.com/a/status/123",
+                          "https://x.com/a/not-status/123"):
+            self.assertIsNone(post_id(malicious),malicious)
         src="https://raw.githubusercontent.com/a/b/main/data/works.json"
         r=normalize("FableList",{"id":42,"title":"A","post":"https://x.com/u/status/456",
                                   "section":"游戏","url":"https://example.com/play"},0,src)
