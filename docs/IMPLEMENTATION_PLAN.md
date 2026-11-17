@@ -26,8 +26,11 @@
 | OS 级隔离执行器 | `scripts/isolation/{Dockerfile.smoke,run_isolated_smoke.sh}`、`.dockerignore` | `tests/test_isolation_harness.py` + 真实 `docker run --network none` |
 | 文档与流程 | `AGENTS.md`、`docs/BROWSER_SMOKE.md`、`.github/workflows/validate.yml` | CI 等价命令本地全绿 |
 
-**门禁结果：** 75 个单元测试通过（起始 56）；`build_catalog --check` / `check_catalog` /
+**门禁结果：** 76 个单元测试通过（起始 56）；`build_catalog --check` / `check_catalog` /
 `build_site` / `node --check` ×3 / `bash -n` 全部 exit 0。
+
+**交付：** PR #9 与 PR #10 均已合并到 `main`；`main` 结束 SHA `3375af2af1f8c68658d606b709326df7f439bfcb`；
+GitHub Pages 的 `build` 与 `deploy` 两个 job 均 success，线上页面全部 HTTP 200 并经真实 Chromium 点击验证。
 
 ---
 
@@ -131,6 +134,7 @@
 * 独立状态分离：来源收录 / 入口已定位 / 浏览器加载 / 实际交互 / 发布授权 分别呈现，无"可玩"单一标签。
 * 空结果与加载失败提示、加载更多、按类型/状态筛选与 CSV 导出（含公式注入转义）。
 * **本轮修复**：Review Queue → Evidence Lab 的溯源跳转此前渲染为死链 `<span>`，现已可用且保持相对路径。
+* **本轮修复（后续）**：链接可点后仍会**新开标签页**（`makeLink()` 无条件 `target="_blank"`）；现仅跨源链接开新标签页，同源溯源就地导航。已在线上真实点击验证。
 
 ### 未完成
 
@@ -140,6 +144,8 @@
 
 **下一步：** 增加移动端/键盘可达性 E2E 与截图归档；为 Review Queue 增加导出；
 实现 Post↔Work↔Repository↔Audit↔Runtime 的双向可点击导航。
+
+> 经验：任何“跳转/导航”类断言必须用真实用户手势（`click()`）。用 `page.goto()` 直接导航会掩盖真实的交互缺陷。
 
 ---
 

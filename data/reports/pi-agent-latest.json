@@ -1,7 +1,7 @@
 {
-  "captured_at": "2026-11-17T07:55:00Z",
+  "captured_at": "2026-11-17T08:12:00Z",
   "base_sha": "ebab78e8f558abb37f7d02ff458c2edef1607801",
-  "head_sha": "see_branch_feat/pi-agent-baseline-hardening-20261117",
+  "head_sha": "3375af2af1f8c68658d606b709326df7f439bfcb",
   "branch": "feat/pi-agent-baseline-hardening-20261117",
   "pr": "https://github.com/1998x-stack/awsome-games/pull/9",
   "environment": {
@@ -16,52 +16,374 @@
     "chromium": "headless shell 159.0.8154.6",
     "start_tree": "clean, 0 ahead / 0 behind origin/main",
     "baseline_db_backup": "/tmp/awsome-games-backup/catalog.sqlite.baseline-ebab78e",
-    "baseline_db_sha256": "602a2a80a77b0e95b883eb419006a8017ee4cca5d857a31c4a0712802b56d5fa"
+    "baseline_db_sha256": "602a2a80a77b0e95b883eb419006a8017ee4cca5d857a31c4a0712802b56d5fa",
+    "branches": [
+      "feat/pi-agent-baseline-hardening-20261117",
+      "fix/m5-internal-evidence-link"
+    ]
   },
   "metrics": [
-    {"name": "projects", "value": 155, "before": 155, "source": "SELECT COUNT(*) FROM projects", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z"},
-    {"name": "repositories", "value": 54, "before": 54, "source": "SELECT COUNT(*) FROM repositories", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z"},
-    {"name": "project_repositories", "value": 150, "before": 150, "source": "SELECT COUNT(*) FROM project_repositories", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z"},
-    {"name": "links", "value": 64, "before": 64, "source": "SELECT COUNT(*) FROM links", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z"},
-    {"name": "prompts", "value": 76, "before": 76, "source": "SELECT COUNT(*) FROM prompts", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z"},
-    {"name": "evidence_sources", "value": 81, "before": 81, "source": "SELECT COUNT(*) FROM evidence_sources", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z"},
-    {"name": "project_evidence", "value": 155, "before": 155, "regression_observed": 310, "source": "SELECT COUNT(*) FROM project_evidence", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z", "note": "a rebuild used to double this to 310 by inserting a fabricated sqlite_snapshot_reconstruction row; fixed"},
-    {"name": "research_source_records", "value": 1118, "before": null, "source": "SELECT COUNT(*) FROM research_source_records", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z", "note": "table absent from the committed baseline DB; materialised on first build from data/research/v1"},
-    {"name": "research_posts", "value": 907, "before": null, "source": "SELECT COUNT(*) FROM research_posts", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z", "note": "906 exact X status ids + 1 orphan key; NOT 907 games"},
-    {"name": "research_works", "value": 64, "before": null, "source": "SELECT COUNT(*) FROM research_works", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z"},
-    {"name": "research_repositories", "value": 83, "before": null, "source": "SELECT COUNT(*) FROM research_repositories", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z"},
-    {"name": "research_claims", "value": 12, "before": null, "source": "SELECT COUNT(*) FROM research_claims", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z"},
-    {"name": "research_project_links", "value": 63, "before": null, "source": "SELECT COUNT(*) FROM research_project_links", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z", "note": "all method=EXACT_REPO_AND_TITLE"},
-    {"name": "reviewed_static_entries", "value": 11, "before": 11, "source": "SELECT COUNT(*) FROM research_works WHERE entry_status='TREE_PATH_REVIEWED_NOT_EXECUTED'", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z"},
-    {"name": "runtime_evidence_rows", "value": 0, "before": 0, "source": "SELECT COUNT(*) FROM research_runtime_evidence", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z", "note": "no third-party gameplay has been executed or verified"},
-    {"name": "work_reviews", "value": 0, "before": 0, "source": "SELECT COUNT(*) FROM research_work_reviews", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z"},
-    {"name": "post_reviews", "value": 0, "before": 0, "source": "SELECT COUNT(*) FROM research_post_reviews", "method": "sqlite", "captured_at": "2026-11-17T07:47:00Z"},
-    {"name": "published_games", "value": 0, "before": 0, "source": "scripts/build_site.py output field published_games", "method": "build_site", "captured_at": "2026-11-17T07:47:00Z"},
-    {"name": "unittest_count", "value": 75, "before": 56, "source": "python -m unittest discover -s tests -v", "method": "unittest", "captured_at": "2026-11-17T07:47:00Z"}
+    {
+      "name": "projects",
+      "value": 155,
+      "before": 155,
+      "source": "SELECT COUNT(*) FROM projects",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z"
+    },
+    {
+      "name": "repositories",
+      "value": 54,
+      "before": 54,
+      "source": "SELECT COUNT(*) FROM repositories",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z"
+    },
+    {
+      "name": "project_repositories",
+      "value": 150,
+      "before": 150,
+      "source": "SELECT COUNT(*) FROM project_repositories",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z"
+    },
+    {
+      "name": "links",
+      "value": 64,
+      "before": 64,
+      "source": "SELECT COUNT(*) FROM links",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z"
+    },
+    {
+      "name": "prompts",
+      "value": 76,
+      "before": 76,
+      "source": "SELECT COUNT(*) FROM prompts",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z"
+    },
+    {
+      "name": "evidence_sources",
+      "value": 81,
+      "before": 81,
+      "source": "SELECT COUNT(*) FROM evidence_sources",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z"
+    },
+    {
+      "name": "project_evidence",
+      "value": 155,
+      "before": 155,
+      "regression_observed": 310,
+      "source": "SELECT COUNT(*) FROM project_evidence",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z",
+      "note": "a rebuild used to double this to 310 by inserting a fabricated sqlite_snapshot_reconstruction row; fixed"
+    },
+    {
+      "name": "research_source_records",
+      "value": 1118,
+      "before": null,
+      "source": "SELECT COUNT(*) FROM research_source_records",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z",
+      "note": "table absent from the committed baseline DB; materialised on first build from data/research/v1"
+    },
+    {
+      "name": "research_posts",
+      "value": 907,
+      "before": null,
+      "source": "SELECT COUNT(*) FROM research_posts",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z",
+      "note": "906 exact X status ids + 1 orphan key; NOT 907 games"
+    },
+    {
+      "name": "research_works",
+      "value": 64,
+      "before": null,
+      "source": "SELECT COUNT(*) FROM research_works",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z"
+    },
+    {
+      "name": "research_repositories",
+      "value": 83,
+      "before": null,
+      "source": "SELECT COUNT(*) FROM research_repositories",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z"
+    },
+    {
+      "name": "research_claims",
+      "value": 12,
+      "before": null,
+      "source": "SELECT COUNT(*) FROM research_claims",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z"
+    },
+    {
+      "name": "research_project_links",
+      "value": 63,
+      "before": null,
+      "source": "SELECT COUNT(*) FROM research_project_links",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z",
+      "note": "all method=EXACT_REPO_AND_TITLE"
+    },
+    {
+      "name": "reviewed_static_entries",
+      "value": 11,
+      "before": 11,
+      "source": "SELECT COUNT(*) FROM research_works WHERE entry_status='TREE_PATH_REVIEWED_NOT_EXECUTED'",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z"
+    },
+    {
+      "name": "runtime_evidence_rows",
+      "value": 0,
+      "before": 0,
+      "source": "SELECT COUNT(*) FROM research_runtime_evidence",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z",
+      "note": "no third-party gameplay has been executed or verified"
+    },
+    {
+      "name": "work_reviews",
+      "value": 0,
+      "before": 0,
+      "source": "SELECT COUNT(*) FROM research_work_reviews",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z"
+    },
+    {
+      "name": "post_reviews",
+      "value": 0,
+      "before": 0,
+      "source": "SELECT COUNT(*) FROM research_post_reviews",
+      "method": "sqlite",
+      "captured_at": "2026-11-17T07:47:00Z"
+    },
+    {
+      "name": "published_games",
+      "value": 0,
+      "before": 0,
+      "source": "scripts/build_site.py output field published_games",
+      "method": "build_site",
+      "captured_at": "2026-11-17T07:47:00Z"
+    },
+    {
+      "name": "unittest_count",
+      "value": 76,
+      "before": 56,
+      "source": "python -m unittest discover -s tests -v",
+      "method": "unittest",
+      "captured_at": "2026-11-17T07:47:00Z"
+    }
   ],
   "milestones": {
-    "M1": {"status": "PARTIAL", "verified": ["evidence semantics separated (model vs prompt)", "exact-only merging (EXACT_REPO_AND_TITLE)", "frozen snapshot immutability", "independent review layer", "provenance fabricated-on-rebuild defect fixed (project_evidence 310 -> 155)", "idempotent import defect fixed (sqlite_sequence / updated_at)"], "not_started": ["904 unmapped posts need first-hand evidence review", "Last Return alias still CANDIDATE", "multi-to-multi alias/mirror modelling"]},
-    "M2": {"status": "NOT_STARTED", "verified": ["83 candidates routed only (32 outside the legacy collector)"], "not_started": ["zero source-level/licence audits", "no data/research/audits/*.json"]},
-    "M3": {"status": "CAPABILITY_VERIFIED_THIRD_PARTY_NOT_TESTED", "verified": ["OS-level isolation harness (--network none, read-only rootfs, read-only staged mount, dropped caps, non-root)", "self-authored fixture -> BROWSER_LOAD_CHECKED with iframe_isolation true", "importer fails closed against a self-authored fixture"], "not_started": ["zero third-party runs", "no per-game interaction assertions", "no WebRTC/UDP/WebGPU matrix"]},
-    "M4": {"status": "PARTIAL", "verified": ["read-only daily drift check", "validate.yml now covers compileall/unit/node/bash/site"], "not_started": ["SourceAdapter abstraction", "metadata-only PR proposals", "link liveness monitoring", "migration framework"]},
-    "M5": {"status": "PARTIAL", "verified": ["documented timeline + review queue", "textContent-only rendering", "separate evidence levels", "cross-page traceability link defect fixed", "zero page/console errors in real Chromium"], "not_started": ["all-device visual acceptance", "bi-directional Post<->Work<->Repository<->Audit navigation", "review-queue CSV export"]}
+    "M1": {
+      "status": "PARTIAL",
+      "verified": [
+        "evidence semantics separated (model vs prompt)",
+        "exact-only merging (EXACT_REPO_AND_TITLE)",
+        "frozen snapshot immutability",
+        "independent review layer",
+        "provenance fabricated-on-rebuild defect fixed (project_evidence 310 -> 155)",
+        "idempotent import defect fixed (sqlite_sequence / updated_at)"
+      ],
+      "not_started": [
+        "904 unmapped posts need first-hand evidence review",
+        "Last Return alias still CANDIDATE",
+        "multi-to-multi alias/mirror modelling"
+      ]
+    },
+    "M2": {
+      "status": "NOT_STARTED",
+      "verified": [
+        "83 candidates routed only (32 outside the legacy collector)"
+      ],
+      "not_started": [
+        "zero source-level/licence audits",
+        "no data/research/audits/*.json"
+      ]
+    },
+    "M3": {
+      "status": "CAPABILITY_VERIFIED_THIRD_PARTY_NOT_TESTED",
+      "verified": [
+        "OS-level isolation harness (--network none, read-only rootfs, read-only staged mount, dropped caps, non-root)",
+        "self-authored fixture -> BROWSER_LOAD_CHECKED with iframe_isolation true",
+        "importer fails closed against a self-authored fixture"
+      ],
+      "not_started": [
+        "zero third-party runs",
+        "no per-game interaction assertions",
+        "no WebRTC/UDP/WebGPU matrix"
+      ]
+    },
+    "M4": {
+      "status": "PARTIAL",
+      "verified": [
+        "read-only daily drift check",
+        "validate.yml now covers compileall/unit/node/bash/site"
+      ],
+      "not_started": [
+        "SourceAdapter abstraction",
+        "metadata-only PR proposals",
+        "link liveness monitoring",
+        "migration framework"
+      ]
+    },
+    "M5": {
+      "status": "PARTIAL",
+      "verified": [
+        "documented timeline + review queue",
+        "textContent-only rendering",
+        "separate evidence levels",
+        "cross-page traceability link defect fixed",
+        "zero page/console errors in real Chromium"
+      ],
+      "not_started": [
+        "all-device visual acceptance",
+        "bi-directional Post<->Work<->Repository<->Audit navigation",
+        "review-queue CSV export"
+      ]
+    }
   },
   "defects_fixed": [
-    {"id": 1, "severity": "P1", "area": "M1 provenance", "evidence": "project_evidence 155 -> 310 after rebuild; 155 fabricated rows in site/data/catalog.json", "fix": "export_seed.py round-trips real evidence_type/confidence; seed_database never materialises SYNTHETIC_EVIDENCE_TYPES", "status": "VERIFIED"},
-    {"id": 2, "severity": "P1", "area": "M1 idempotency", "evidence": "two consecutive builds produced a 10-line logical dump difference; sqlite_sequence monotonically grew", "fix": "guarded INSERT ... WHERE NOT EXISTS on AUTOINCREMENT tables; updated_at only advances on real change", "status": "VERIFIED", "after_evidence": "dump difference 0 lines"},
-    {"id": 3, "severity": "P1", "area": "M5 navigation", "evidence": "review.html Evidence Lab cross-link rendered as <span>; anchors per card = 1", "fix": "resolve URLs against document.baseURI, keep same-origin relative, reject embedded credentials", "status": "VERIFIED", "after_evidence": "anchors per card = 2, deep link opens the dialog"},
-    {"id": 4, "severity": "P2", "area": "M1 safety", "evidence": "build_catalog.py --fresh unlinked the authoritative SQLite with no backup", "fix": "integrity-checked snapshot to data/backups/ before deletion; refuse on failure", "status": "VERIFIED"},
-    {"id": 5, "severity": "P2", "area": "M5 accuracy", "evidence": "site/index.html hardcoded '83 个仓库'", "fix": "value-free copy plus a test banning hardcoded research counts", "status": "VERIFIED"},
-    {"id": 6, "severity": "P2", "area": "security", "evidence": "app.js/research.js accepted https://user:pass@host in link rendering", "fix": "all three surfaces reject embedded credentials", "status": "VERIFIED"},
-    {"id": 7, "severity": "P2", "area": "hygiene", "evidence": ".gitignore did not ignore .venv/ although the README instructs creating it", "fix": "added .venv/ and venv/", "status": "VERIFIED"}
+    {
+      "id": 1,
+      "severity": "P1",
+      "area": "M1 provenance",
+      "evidence": "project_evidence 155 -> 310 after rebuild; 155 fabricated rows in site/data/catalog.json",
+      "fix": "export_seed.py round-trips real evidence_type/confidence; seed_database never materialises SYNTHETIC_EVIDENCE_TYPES",
+      "status": "VERIFIED"
+    },
+    {
+      "id": 2,
+      "severity": "P1",
+      "area": "M1 idempotency",
+      "evidence": "two consecutive builds produced a 10-line logical dump difference; sqlite_sequence monotonically grew",
+      "fix": "guarded INSERT ... WHERE NOT EXISTS on AUTOINCREMENT tables; updated_at only advances on real change",
+      "status": "VERIFIED",
+      "after_evidence": "dump difference 0 lines"
+    },
+    {
+      "id": 3,
+      "severity": "P1",
+      "area": "M5 navigation",
+      "evidence": "review.html Evidence Lab cross-link rendered as <span>; anchors per card = 1",
+      "fix": "resolve URLs against document.baseURI, keep same-origin relative, reject embedded credentials",
+      "status": "VERIFIED",
+      "after_evidence": "anchors per card = 2, deep link opens the dialog"
+    },
+    {
+      "id": 4,
+      "severity": "P2",
+      "area": "M1 safety",
+      "evidence": "build_catalog.py --fresh unlinked the authoritative SQLite with no backup",
+      "fix": "integrity-checked snapshot to data/backups/ before deletion; refuse on failure",
+      "status": "VERIFIED"
+    },
+    {
+      "id": 5,
+      "severity": "P2",
+      "area": "M5 accuracy",
+      "evidence": "site/index.html hardcoded '83 个仓库'",
+      "fix": "value-free copy plus a test banning hardcoded research counts",
+      "status": "VERIFIED"
+    },
+    {
+      "id": 6,
+      "severity": "P2",
+      "area": "security",
+      "evidence": "app.js/research.js accepted https://user:pass@host in link rendering",
+      "fix": "all three surfaces reject embedded credentials",
+      "status": "VERIFIED"
+    },
+    {
+      "id": 7,
+      "severity": "P2",
+      "area": "hygiene",
+      "evidence": ".gitignore did not ignore .venv/ although the README instructs creating it",
+      "fix": "added .venv/ and venv/",
+      "status": "VERIFIED"
+    },
+    {
+      "id": 8,
+      "severity": "P1",
+      "area": "M5 navigation",
+      "evidence": "live https://1998x-stack.github.io/awsome-games/review.html: both anchors carried target=\"_blank\", so a real click on the Evidence Lab link opened a new tab instead of navigating in place",
+      "fix": "review.js makeLink() and research.js link() now force a new tab only for cross-origin URLs; same-origin audit-trail hops navigate in place",
+      "status": "VERIFIED",
+      "after_evidence": "live click opened 0 new tabs, navigated to research.html?kind=repositories&id=..., detail dialog open",
+      "test_lesson": "the PR #9 E2E test followed the link with page.goto() instead of clicking it; the strengthened test asserts target attributes and performs a real click() and was proven to FAIL on the pre-fix code"
+    }
   ],
   "tests": {
     "command": "python -m unittest discover -s tests -v",
-    "passed": 75,
+    "passed": 76,
     "failed": 0,
     "before": 56,
-    "new_files": ["tests/test_site_link_policy.py", "tests/test_site_e2e.py", "tests/test_seed_provenance.py", "tests/test_isolation_harness.py"],
-    "browser_e2e": {"tool": "playwright 1.65.2 / chromium headless shell 159.0.8154.6", "pages": ["index.html", "research.html", "review.html"], "page_errors": 0, "console_errors": 0, "blocked_external_requests": 0, "interactions": ["search", "four filters", "empty state", "load more 36->72", "?work= deep link", "?kind=repositories&id= deep link", "Escape close", "CSV download"]}
+    "new_files": [
+      "tests/test_site_link_policy.py",
+      "tests/test_site_e2e.py",
+      "tests/test_seed_provenance.py",
+      "tests/test_isolation_harness.py"
+    ],
+    "browser_e2e": {
+      "tool": "playwright 1.65.2 / chromium headless shell 159.0.8154.6",
+      "pages": [
+        "index.html",
+        "research.html",
+        "review.html"
+      ],
+      "page_errors": 0,
+      "console_errors": 0,
+      "blocked_external_requests": 0,
+      "interactions": [
+        "search",
+        "four filters",
+        "empty state",
+        "load more 36->72",
+        "?work= deep link",
+        "?kind=repositories&id= deep link",
+        "Escape close",
+        "CSV download"
+      ]
+    },
+    "regression_method": "new and strengthened tests were executed against the pre-fix committed review.js: FAILED (2 failures: \"'_blank' is not None\" and a missing-resolver regex); with the fix: OK",
+    "live_production": {
+      "url": "https://1998x-stack.github.io/awsome-games/",
+      "note": "Pages project site served under the /awsome-games/ subpath, the exact scenario the relative-link fix targets",
+      "pages_loaded": [
+        "index.html",
+        "research.html",
+        "review.html"
+      ],
+      "page_errors": 0,
+      "http_status_all_resources": 200,
+      "external_link_target": "_blank",
+      "internal_link_target": null,
+      "tabs_opened_on_internal_click": 0,
+      "url_after_click": "https://1998x-stack.github.io/awsome-games/research.html?kind=repositories&id=0xCodez%2Fthousand-peaks",
+      "detail_dialog_open": true,
+      "detail_title": "Dragon of a Thousand Peaks",
+      "live_research_stats": {
+        "source_records": 1118,
+        "posts": 907,
+        "works": 64,
+        "repositories": 83,
+        "claims": 12
+      },
+      "live_index_stats": {
+        "projects": 155,
+        "repositories": 54,
+        "demos": 59,
+        "published_for_play": 0
+      }
+    }
   },
   "runtime_evidence": {
     "third_party_games_tested": 0,
@@ -81,8 +403,17 @@
       "screenshot_sha256": "5a91a8c388c78289ebae06c5746de054d3e043eb760ffaf02199706a234345c0",
       "report": ".cache/iso-reports/smoke.json"
     },
-    "importer_fail_closed": {"attempt": "import the self-authored fixture against work_id F52-W012", "result": "ValueError: Missing/unsafe staged entry (exit 1)", "runtime_evidence_rows_after": 0},
-    "not_run": ["any third-party HTML/JS", "any upstream npm install or build", "WebRTC/UDP/WebGPU compatibility", "actual gameplay interaction verification for any real work"]
+    "importer_fail_closed": {
+      "attempt": "import the self-authored fixture against work_id F52-W012",
+      "result": "ValueError: Missing/unsafe staged entry (exit 1)",
+      "runtime_evidence_rows_after": 0
+    },
+    "not_run": [
+      "any third-party HTML/JS",
+      "any upstream npm install or build",
+      "WebRTC/UDP/WebGPU compatibility",
+      "actual gameplay interaction verification for any real work"
+    ]
   },
   "security": {
     "third_party_code_executed": false,
@@ -95,33 +426,129 @@
     "secrets_found_in_diff": false,
     "images_bake_credentials": false,
     "sensitive_paths_excluded_from_image": true,
-    "committed_binary": {"path": "data/catalog.sqlite", "before_bytes": 319488, "after_bytes": 1343488, "note": "research layer materialised; the baseline snapshot had no research_* tables"}
+    "committed_binary": {
+      "path": "data/catalog.sqlite",
+      "before_bytes": 319488,
+      "after_bytes": 1343488,
+      "note": "research layer materialised; the baseline snapshot had no research_* tables"
+    }
   },
   "deploy": {
-    "merged": false,
-    "merge_reason_not_done": "merging triggers the GitHub Pages production deployment; treated as a production-affecting action requiring explicit human confirmation under the safety constraints",
-    "ci": {"workflow": "Validate catalog", "conclusion": "success", "duration_seconds": 14, "url": "https://github.com/1998x-stack/awsome-games/actions/runs/44042084460", "job_url": "https://github.com/1998x-stack/awsome-games/actions/runs/44042084460/job/133898822719"},
-    "pages_workflow_triggered": false,
-    "pages_deploy_verified": false,
-    "live_site_checked": false,
-    "merge_command_when_authorised": "gh pr merge 9 --squash --delete-branch"
+    "merged": true,
+    "pull_requests": [
+      {
+        "number": 9,
+        "url": "https://github.com/1998x-stack/awsome-games/pull/9",
+        "state": "MERGED",
+        "merge_commit": "e41b877c542bb139ca942782fc93a09328c4dbd2"
+      },
+      {
+        "number": 10,
+        "url": "https://github.com/1998x-stack/awsome-games/pull/10",
+        "state": "MERGED",
+        "merge_commit": "3375af2af1f8c68658d606b709326df7f439bfcb"
+      }
+    ],
+    "branch_protection_on_main": "none (GET /branches/main/protection -> 404)",
+    "ci": [
+      {
+        "pr": 9,
+        "workflow": "Validate catalog",
+        "conclusion": "success",
+        "duration_seconds": 14,
+        "url": "https://github.com/1998x-stack/awsome-games/actions/runs/44042084460"
+      },
+      {
+        "pr": 10,
+        "workflow": "Validate catalog",
+        "conclusion": "success",
+        "duration_seconds": 13,
+        "url": "https://github.com/1998x-stack/awsome-games/actions/runs/44043909660"
+      }
+    ],
+    "pages_workflow": [
+      {
+        "pr": 9,
+        "url": "https://github.com/1998x-stack/awsome-games/actions/runs/44042834054",
+        "build": "success",
+        "deploy": "success",
+        "sha": "e41b877c542bb139ca942782fc93a09328c4dbd2"
+      },
+      {
+        "pr": 10,
+        "url": "https://github.com/1998x-stack/awsome-games/actions/runs/44044106186",
+        "build": "success",
+        "deploy": "success",
+        "sha": "3375af2af1f8c68658d606b709326df7f439bfcb"
+      }
+    ],
+    "pages_url": "https://1998x-stack.github.io/awsome-games/",
+    "live_manifest_repository_ref": "3375af2af1f8c68658d606b709326df7f439bfcb",
+    "playable_published": 0,
+    "repository_snapshots_published": [],
+    "third_party_code_republished": false,
+    "live_site_verified": true
   },
   "issues": [
-    {"ref": "#4", "severity": "high", "title": "904 unmapped original posts still need first-hand evidence adjudication", "evidence": "only 3 of 907 posts carry a work_id"},
-    {"ref": "#5", "severity": "high", "title": "zero source-level/licence audits across 83 candidate repositories"},
-    {"ref": "#6", "severity": "blocker", "title": "no third-party game has been executed or gameplay-verified", "evidence": "research_runtime_evidence = 0 rows"}
+    {
+      "ref": "#4",
+      "severity": "high",
+      "title": "904 unmapped original posts still need first-hand evidence adjudication",
+      "evidence": "only 3 of 907 posts carry a work_id"
+    },
+    {
+      "ref": "#5",
+      "severity": "high",
+      "title": "zero source-level/licence audits across 83 candidate repositories"
+    },
+    {
+      "ref": "#6",
+      "severity": "blocker",
+      "title": "no third-party game has been executed or gameplay-verified",
+      "evidence": "research_runtime_evidence = 0 rows"
+    }
   ],
   "blockers": [
-    {"severity": "blocker", "title": "all 64 research works remain NOT_TESTED; GAMEPLAY_VERIFIED = 0", "reason": "no third-party sources cloned locally; running third-party programs requires explicit human confirmation", "unblock": "confirm authorisation, then run scripts/isolation/run_isolated_smoke.sh against reviewed entry paths"},
-    {"severity": "blocker", "title": "the 11 reviewed static entries cannot be executed", "reason": "entry files are not present locally (games/_repos does not exist)", "unblock": "complete read-only M2 source acquisition and licence review first"},
-    {"severity": "medium", "title": "the SQLite binary is not byte-reproducible", "evidence": "even after journal_mode=DELETE + VACUUM the SHA-256 of two logically identical builds differs", "unblock": "decide whether to adopt a logical dump/JSON projection as the authoritative artifact, or add a logical-dump equality check in CI"}
+    {
+      "severity": "blocker",
+      "title": "all 64 research works remain NOT_TESTED; GAMEPLAY_VERIFIED = 0",
+      "reason": "no third-party sources cloned locally; running third-party programs requires explicit human confirmation",
+      "unblock": "confirm authorisation, then run scripts/isolation/run_isolated_smoke.sh against reviewed entry paths"
+    },
+    {
+      "severity": "blocker",
+      "title": "the 11 reviewed static entries cannot be executed",
+      "reason": "entry files are not present locally (games/_repos does not exist)",
+      "unblock": "complete read-only M2 source acquisition and licence review first"
+    },
+    {
+      "severity": "medium",
+      "title": "the SQLite binary is not byte-reproducible",
+      "evidence": "even after journal_mode=DELETE + VACUUM the SHA-256 of two logically identical builds differs",
+      "unblock": "decide whether to adopt a logical dump/JSON projection as the authoritative artifact, or add a logical-dump equality check in CI"
+    }
   ],
   "next_actions": [
     "M2: complete a full source-level audit of the 11 repositories that already have reviewed static entries (read-only, lowest risk, highest value)",
     "M1: turn the 907 posts into batched review work orders layered by kind_signal and match_status",
     "M5: extend tests/test_site_e2e.py to mobile viewports plus keyboard reachability, and archive screenshot hashes",
     "M4: introduce the SourceAdapter abstraction plus metadata-only PR proposals, and wire the remaining data/sources.json sources into the read-only drift check",
+    "Keep every navigation test gesture-based: page.goto() masked the target=\"_blank\" defect that only a real click on the live site exposed",
     "M3 (requires human confirmation): run one reviewed third-party entry end to end inside the isolation harness before scaling up",
     "Review the three P1 fixes: confirm the updated_at CASE covers every field that should bump the timestamp, and decide the tie-break when one URL carries several real evidence types"
+  ],
+  "prs": [
+    {
+      "number": 9,
+      "url": "https://github.com/1998x-stack/awsome-games/pull/9",
+      "state": "MERGED",
+      "merge_commit": "e41b877c542bb139ca942782fc93a09328c4dbd2"
+    },
+    {
+      "number": 10,
+      "url": "https://github.com/1998x-stack/awsome-games/pull/10",
+      "state": "MERGED",
+      "merge_commit": "3375af2af1f8c68658d606b709326df7f439bfcb"
+    }
   ]
 }
