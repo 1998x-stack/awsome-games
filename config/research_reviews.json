@@ -1,0 +1,6 @@
+{
+  "schema_version": 1,
+  "_comment": "Only APPROVED entries with directly reviewed HTTPS evidence URLs will override source fields. Do not claim gameplay verification in this manifest.",
+  "works": [],
+  "posts": []
+}
