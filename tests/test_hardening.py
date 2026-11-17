@@ -89,10 +89,10 @@ class PublisherTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def publish(self,allow=False,max_size=1024*1024):
+    def publish(self,allow=False,max_size=1024*1024,preview=False):
         (self.base/'config/publication_approvals.json').write_text(json.dumps({'approved_repositories':['example/game'] if allow else []}))
         with patch.object(publisher,'ROOT',self.base),patch.object(publisher,'APPROVALS',self.base/'config/publication_approvals.json'),patch.object(publisher,'connect',return_value=MagicMock()),patch.object(publisher,'export_catalog',return_value=copy.deepcopy(self.data)):
-            result=publisher.build_site(max_site_bytes=max_size)
+            result=publisher.build_site(include_unapproved=preview,max_site_bytes=max_size)
             public=json.loads((self.base/'site/data/catalog.json').read_text())
             return result,public
 
@@ -149,7 +149,7 @@ class PublisherTests(unittest.TestCase):
     def test_preview_unapproved_forbidden_on_ci(self):
         with patch.dict('os.environ',{'CI':'true'}):
             with self.assertRaisesRegex(RuntimeError,"CI or Pages"):
-                self.publish(allow=False)
+                self.publish(allow=False,preview=True)
 
     def test_publication_limit_does_not_destroy_previous_snapshot(self):
         old=self.base/'site/games/_repos/example__game'
