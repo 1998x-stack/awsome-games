@@ -112,6 +112,53 @@ class PublisherTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'Pages artifact'):
             self.publish(allow=True,max_size=5)
 
+    def test_approved_snapshots_never_copy_secrets_or_executable_scripts(self):
+        path=self.base/'games/_repos/example__game'
+        (path/'.env.production').write_text('DO_NOT_PUBLISH=secret')
+        (path/'credentials.json').write_text('{"token":"secret"}')
+        (path/'run.sh').write_text('echo not a web asset')
+        (path/'image.svg').write_text('<svg/>')
+        self.publish(allow=True)
+        site=self.base/'site/games/_repos/example__game'
+        self.assertFalse((site/'.env.production').exists())
+        self.assertFalse((site/'credentials.json').exists())
+        self.assertFalse((site/'run.sh').exists())
+        self.assertTrue((site/'index.html').exists())
+        self.assertTrue((site/'image.svg').exists())
+
+    def test_approved_snapshot_symlink_escape_fails_closed_and_keeps_old_site(self):
+        source=self.base/'games/_repos/example__game'
+        outside=self.base/'outside.txt'
+        outside.write_text('PRIVATE')
+        (source/'escape.json').symlink_to(outside)
+        old=self.base/'site/games/_repos/example__game'
+        old.mkdir(parents=True)
+        (old/'keep.html').write_text('previous snapshot')
+        with self.assertRaisesRegex(RuntimeError,"symlink"):
+            self.publish(allow=True)
+        self.assertEqual((old/'keep.html').read_text(),'previous snapshot')
+        self.assertFalse((old/'escape.json').exists())
+
+    def test_reject_invalid_publishing_approvals(self):
+        path=self.base/'config/publication_approvals.json'
+        path.write_text(json.dumps({'approved_repositories':['../../etc/passwd']}))
+        with self.assertRaisesRegex(ValueError,"approved_repositories"):
+            with patch.object(publisher,'APPROVALS',path):
+                publisher.publishable_repositories()
+
+    def test_preview_unapproved_forbidden_on_ci(self):
+        with patch.dict('os.environ',{'CI':'true'}):
+            with self.assertRaisesRegex(RuntimeError,"CI or Pages"):
+                self.publish(allow=False)
+
+    def test_publication_limit_does_not_destroy_previous_snapshot(self):
+        old=self.base/'site/games/_repos/example__game'
+        old.mkdir(parents=True)
+        (old/'keep.html').write_text('old copy')
+        with self.assertRaisesRegex(RuntimeError,"Pages artifact"):
+            self.publish(allow=True,max_size=5)
+        self.assertEqual((old/'keep.html').read_text(),'old copy')
+
     def test_player_is_not_same_origin_with_untrusted_game(self):
         html=(ROOT/'site/index.html').read_text()
         js=(ROOT/'site/assets/app.js').read_text()
