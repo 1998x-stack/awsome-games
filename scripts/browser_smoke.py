@@ -107,9 +107,11 @@ def smoke(root: Path, entry: str, screenshot: Path | None=None, timeout_ms: int=
                 screenshot.parent.mkdir(parents=True,exist_ok=True)
                 page.screenshot(path=str(screenshot),full_page=True)
                 result["screenshot"]=str(screenshot)
-            result["status"]="BROWSER_LOAD_CHECKED" if result["frame_body_loaded"] and result["iframe_isolation"] and not result["console_errors"] and not result["blocked_requests"]
-                and not result["blocked_websockets"] and not result["failed_requests"]
-                and not result["http_errors"] else "INCOMPLETE_OR_FAILED"
+            load_ok=(result["frame_body_loaded"] and result["iframe_isolation"]
+                     and not result["console_errors"] and not result["blocked_requests"]
+                     and not result["blocked_websockets"] and not result["failed_requests"]
+                     and not result["http_errors"])
+            result["status"]="BROWSER_LOAD_CHECKED" if load_ok else "INCOMPLETE_OR_FAILED"
             ctx.close()
             browser.close()
             browser=None
