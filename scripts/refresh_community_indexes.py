@@ -16,7 +16,8 @@ from bs4 import BeautifulSoup
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / 'data'
-RAW = DATA / 'raw'
+COMMUNITY = DATA / 'community'
+RAW = COMMUNITY / 'raw'
 SOURCE_CSV = 'https://raw.githubusercontent.com/ygx2378/awesome-fable-5-2-games/master/data/games.csv'
 AWESOME_BASE = 'https://raw.githubusercontent.com/fengyiqicoder/awesome-fable-5.2/main/all/'
 CASES_JSON = 'https://raw.githubusercontent.com/apimodels/claude-fable-5-2-prompts/main/data/cases.json'
@@ -238,16 +239,25 @@ def get_online(f):
     for name in AWESOME_FILES:
         texts.append((AWESOME_BASE+name,'awesome_'+name,lambda b,n=name:from_awesome(b,n)))
     texts += [(CASES_JSON,'cases.json',from_cases),(SANDBASE_JSON,'videos.json',from_sandbase)]
+    failures=[]
     for url,file,parser in texts:
         body=f.get(url,file)
-        if not body:continue
+        if not body:
+            failures.append(url)
+            continue
         try:
             part=parser(body)
+            if not part:
+                failures.append(url+": empty result")
+                continue
             all.extend(part)
             print(f'[{len(part):4}] {url}')
         except Exception as e:
+            failures.append(url+": "+str(e)[:200])
             print('PARSE ERROR:',url,repr(e),file=sys.stderr)
-    (DATA/'fetch_log.json').write_text(json.dumps(f.status,ensure_ascii=False,indent=2),encoding='utf8')
+    (COMMUNITY/'fetch_log.json').write_text(json.dumps(f.status,ensure_ascii=False,indent=2),encoding='utf8')
+    if failures:
+        raise RuntimeError('Incomplete upstream metadata; previous database preserved: '+' | '.join(failures))
     return all
 
 
@@ -311,9 +321,11 @@ def dedupe(rows):
 
 
 def write_db(rows, observations):
-    db=DATA/'fable_projects.sqlite'
-    if db.exists():db.unlink()
-    conn=sqlite3.connect(db)
+    db=COMMUNITY/'fable_projects.sqlite'
+    # Never destroy the previous community DB before a replacement is valid.
+    staged=db.with_suffix('.sqlite.staging')
+    if staged.exists():staged.unlink()
+    conn=sqlite3.connect(staged)
     conn.executescript('''
     PRAGMA foreign_keys=ON;
     CREATE TABLE projects(
@@ -397,12 +409,13 @@ def write_db(rows, observations):
     missing=conn.execute('SELECT COUNT(*) FROM observations WHERE project_id IS NULL').fetchone()[0]
     if missing: print('WARNING: observations missing project mapping:',missing,file=sys.stderr)
     conn.close()
+    os.replace(staged,db)
     return db
 
 
 def export(rows,online):
     cols=['project_id','title','model','category','creator','source_code_status','repo_urls','play_urls','post_urls','source_urls','prompt_urls','source_count','observations','evidence','description']
-    with open(DATA/'projects.csv','w',encoding='utf-8-sig',newline='') as f:
+    with open(COMMUNITY/'projects.csv','w',encoding='utf-8-sig',newline='') as f:
         wr=csv.DictWriter(f,fieldnames=cols);wr.writeheader()
         for p in rows:
             wr.writerow(dict(project_id=p['project_id'],title=p['title'],model=p['model'],category=p['category'],
@@ -413,14 +426,14 @@ def export(rows,online):
                         source_count=p['source_count'],observations=p['observations'],evidence='; '.join(p['evidence']),
                         description=p['description']))
     # JSONL is particularly convenient for ETL / search engines.
-    with (DATA/'projects.jsonl').open('w',encoding='utf8') as f:
+    with (COMMUNITY/'projects.jsonl').open('w',encoding='utf8') as f:
         for p in rows:
             f.write(json.dumps(p,ensure_ascii=False,sort_keys=True)+'\n')
     repo={}
     for p in rows:
         for r in p['repos']:
             repo.setdefault(r,[]).append(p['title'])
-    with (DATA/'repositories.csv').open('w',encoding='utf-8-sig',newline='') as f:
+    with (COMMUNITY/'repositories.csv').open('w',encoding='utf-8-sig',newline='') as f:
         wr=csv.writer(f);wr.writerow(['repo_full_name','repo_url','projects_count','project_titles','license_status','clone_status'])
         for r,projects in sorted(repo.items(),key=lambda kv:kv[0].lower()):
             wr.writerow([r,'https://github.com/'+r,len(projects),' ; '.join(projects),'unknown','not_cloned'])
@@ -433,7 +446,7 @@ def export(rows,online):
              'unique_repository_urls':len(repo),'projects_with_live_links':sum(bool(p['plays']) for p in rows),
              'categories':dict(counts.most_common()),'by_source':dict(source_counts.most_common()),
              'important_limitation':'Public and community attributions only; no individual repo code inspection. Offline environment prevented live HTTP verification or cloning.'}
-    (DATA/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding='utf8')
+    (COMMUNITY/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2),encoding='utf8')
     return summary
 
 
@@ -452,7 +465,7 @@ def clone_repos(rows, limit:int=0):
             logs.append({'repository':repo,'status':'cloned'})
         except Exception as exc:
             logs.append({'repository':repo,'status':'error','error':str(exc)[:300]})
-    (DATA/'clone_results.json').write_text(json.dumps(logs,ensure_ascii=False,indent=2),encoding='utf8')
+    (COMMUNITY/'clone_results.json').write_text(json.dumps(logs,ensure_ascii=False,indent=2),encoding='utf8')
     return Counter(z['status'] for z in logs)
 
 
@@ -462,7 +475,7 @@ def main():
     parser.add_argument('--clone-repos',action='store_true',help='Actually clone public GitHub repos; opt-in because repos can be large')
     parser.add_argument('--clone-limit',type=int,default=0,help='For validation: clone only first N repos')
     opt=parser.parse_args()
-    DATA.mkdir(parents=True,exist_ok=True)
+    COMMUNITY.mkdir(parents=True,exist_ok=True)
     observations=load_seed()
     if opt.online:
         observations += get_online(Fetcher(os.getenv('GITHUB_TOKEN','')))

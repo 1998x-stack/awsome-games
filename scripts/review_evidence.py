@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""Apply cited manual adjudications; no upstream API calls and no game execution.
+
+The JSON config is review source-of-truth in Git. Imported snapshot facts remain
+separate. Repeated imports are idempotent and edits are logged in SQLite.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sqlite3
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import urlsplit
+
+from db import ROOT, DB_PATH
+
+DEFAULT = ROOT / "config" / "research_reviews.json"
+ALLOWED_STATUS = {"APPROVED", "DRAFT", "REJECTED"}
+WORK_FIELDS = {"entry_path","entry_status","prompt_status","human_contribution",
+               "human_status","model_evidence","external_dependencies","reviewer_note"}
+POST_FIELDS = {"work_id","entity_id","confidence","reviewer_note"}
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS research_review_history (
+ id INTEGER PRIMARY KEY AUTOINCREMENT,
+ entity_type TEXT NOT NULL,
+ entity_key TEXT NOT NULL,
+ review_json TEXT NOT NULL,
+ evidence_url TEXT NOT NULL,
+ applied_at TEXT NOT NULL
+);
+"""
+
+
+def safe_evidence_url(value):
+    if not value:return ""
+    if not isinstance(value,str):raise ValueError("Evidence URL must be a string")
+    try:
+        p=urlsplit(value)
+        if p.scheme!="https" or not p.hostname or p.username or p.password or any(ord(x)<32 for x in value):
+            raise ValueError("Invalid review evidence URL")
+    except ValueError as exc:
+        raise ValueError("Invalid review evidence URL") from exc
+    return value
+
+
+def safe_entry_path(value):
+    if value is None:return None
+    if not isinstance(value,str) or not value or value.startswith("/") or "\\" in value:
+        raise ValueError("Entry override must be a safe repository-relative path")
+    if any(part in ("",".","..") for part in value.split("/")) or not value.lower().endswith((".html",".htm")):
+        raise ValueError("Invalid entry path override")
+    return value
+
+
+def validate_manifest(raw):
+    if not isinstance(raw,dict) or raw.get("schema_version")!=1:
+        raise ValueError("Unsupported review manifest")
+    works=raw.get("works",[])
+    posts=raw.get("posts",[])
+    if not isinstance(works,list) or not isinstance(posts,list):
+        raise ValueError("Review manifest works/posts must be arrays")
+    prepared=[]
+    seen=set()
+    for kind,group,identity,allowed in (("work",works,"work_id",WORK_FIELDS),
+                                         ("post",posts,"post_key",POST_FIELDS)):
+        for item in group:
+            if not isinstance(item,dict) or not isinstance(item.get(identity),str) or not item[identity]:
+                raise ValueError("Review entry must have a stable "+identity)
+            status=item.get("review_status")
+            if status not in ALLOWED_STATUS:
+                raise ValueError("Invalid review_status")
+            evidence=safe_evidence_url(item.get("evidence_url"))
+            if status=="APPROVED" and not evidence:
+                raise ValueError("Approved review requires an HTTPS evidence URL")
+            unexpected=set(item)-({identity,"review_status","evidence_url","reviewed_at"}|allowed)
+            if unexpected:raise ValueError("Unknown fields in review manifest: "+",".join(sorted(unexpected)))
+            key=(kind,item[identity])
+            if key in seen:raise ValueError("Duplicate review entry: "+str(key))
+            seen.add(key)
+            if kind=="work" and "entry_path" in item:safe_entry_path(item["entry_path"])
+            for field in allowed:
+                if field in item and item[field] is not None and (
+                    not isinstance(item[field],str) or len(item[field])>3000):
+                    raise ValueError("Review field must be bounded text: "+field)
+            prepared.append((kind,item,evidence))
+    return prepared
+
+
+def apply_manifest(conn: sqlite3.Connection, manifest: Path = DEFAULT, dry_run=False):
+    prepared=validate_manifest(json.loads(manifest.read_text(encoding="utf-8")))
+    for kind,item,_ in prepared:
+        table="research_works" if kind=="work" else "research_posts"
+        column="work_id" if kind=="work" else "post_key"
+        if not conn.execute(f"SELECT 1 FROM {table} WHERE {column}=?",(item[column],)).fetchone():
+            raise ValueError("Review references an unknown "+kind+": "+item[column])
+        if kind=="post" and item.get("work_id") and not conn.execute(
+            "SELECT 1 FROM research_works WHERE work_id=?",(item["work_id"],)).fetchone():
+            raise ValueError("Review refers to an unknown work_id")
+    if dry_run:return {"review_entries":len(prepared),"written":0}
+    conn.executescript(SCHEMA)
+    changed=0
+    with conn:
+        for kind,item,evidence in prepared:
+            table="research_work_reviews" if kind=="work" else "research_post_reviews"
+            key="work_id" if kind=="work" else "post_key"
+            fields=WORK_FIELDS if kind=="work" else POST_FIELDS
+            existing=conn.execute(f"SELECT * FROM {table} WHERE {key}=?",(item[key],)).fetchone()
+            prev=dict(existing) if existing else {}
+            desired={field:item.get(field,prev.get(field)) for field in sorted(fields)}
+            desired[key]=item[key]
+            desired["review_status"]=item["review_status"]
+            desired["evidence_url"]=evidence or prev.get("evidence_url") or ""
+            if existing and all(prev.get(k)==v for k,v in desired.items()):
+                continue
+            when=datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+            desired["reviewed_at"]=item.get("reviewed_at") or when
+            columns=list(desired)
+            placeholders=",".join("?" for _ in columns)
+            updates=",".join(f"{c}=excluded.{c}" for c in columns if c!=key)
+            conn.execute(f"INSERT INTO {table} ({','.join(columns)}) VALUES({placeholders}) "
+                         f"ON CONFLICT({key}) DO UPDATE SET {updates}",
+                         tuple(desired[c] for c in columns))
+            conn.execute("""INSERT INTO research_review_history
+                (entity_type,entity_key,review_json,evidence_url,applied_at)
+                VALUES(?,?,?,?,?)""",
+                (kind,item[key],json.dumps(desired,ensure_ascii=False,sort_keys=True),
+                 desired["evidence_url"],when))
+            changed+=1
+    return {"review_entries":len(prepared),"written":changed}
+
+
+def main():
+    p=argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--file",type=Path,default=DEFAULT)
+    p.add_argument("--apply",action="store_true",help="Explicitly update SQLite (default is dry-run)")
+    args=p.parse_args()
+    if args.apply:
+        conn=sqlite3.connect(DB_PATH);conn.row_factory=sqlite3.Row
+    else:
+        conn=sqlite3.connect("file:"+str(DB_PATH)+"?mode=ro",uri=True)
+        conn.row_factory=sqlite3.Row
+    try:
+        conn.execute("PRAGMA foreign_keys=ON")
+        result=apply_manifest(conn,args.file,dry_run=not args.apply)
+    finally:conn.close()
+    print(json.dumps(result,ensure_ascii=False))
+
+
+if __name__=="__main__":
+    main()

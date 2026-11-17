@@ -249,6 +249,8 @@ def parse_repo(full_name: str):
     bits = (full_name or "").strip().strip("/").split("/")
     if len(bits) != 2 or not all(bits): return None
     owner, name = bits
+    if not re.fullmatch(r'[A-Za-z0-9-]{1,39}', owner) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,100}', name) or name in ('.','..'):
+        return None
     return {"full_name": f"{owner}/{name}", "owner": owner, "name": name,
             "html_url": f"https://github.com/{owner}/{name}",
             "clone_url": f"https://github.com/{owner}/{name}.git"}
@@ -375,7 +377,7 @@ def seed_database(conn: sqlite3.Connection, seed_path: Path = SEED_PATH):
         ts = now()
         conn.execute("""INSERT INTO projects(id,slug,title,original_title,description,content_type,model_claim,model_version,model_confidence,creator,published_at,prompt_status,source_status,playable_status,created_at,updated_at)
           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-          ON CONFLICT(id) DO UPDATE SET slug=excluded.slug,title=excluded.title,original_title=excluded.original_title,description=excluded.description,content_type=excluded.content_type,model_claim=excluded.model_claim,model_version=excluded.model_version,creator=excluded.creator,published_at=excluded.published_at,prompt_status=excluded.prompt_status,updated_at=excluded.updated_at""",
+          ON CONFLICT(id) DO UPDATE SET slug=excluded.slug,title=excluded.title,original_title=excluded.original_title,description=excluded.description,content_type=excluded.content_type,model_claim=CASE WHEN projects.model_confidence='community_claim' THEN excluded.model_claim ELSE projects.model_claim END,model_version=CASE WHEN projects.model_confidence='community_claim' THEN excluded.model_version ELSE projects.model_version END,creator=excluded.creator,published_at=excluded.published_at,prompt_status=excluded.prompt_status,updated_at=excluded.updated_at""",
           (pid,slug,p.get("title", "Untitled"),p.get("title", "Untitled"),p.get("description", ""),cat_info["content_type"],claim,model_version(claim),"community_claim",creator,p.get("publish_date") or None,";".join(p.get("prompt_statuses",[]) or ([p.get("prompt_status")] if p.get("prompt_status") else [])) or "unknown","indexed" if p.get("repos") else "no_repository","external_demo" if p.get("plays") else "not_checked",ts,ts))
         conn.execute("DELETE FROM project_categories WHERE project_id=?", (pid,))
         for i, cat_id in enumerate(cat_ids):

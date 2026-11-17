@@ -32,3 +32,13 @@
 建议长期记录：GitHub commit SHA、浏览器/OS、HTML SHA256、启动耗时、点击/键盘操作及预期结果、截图、console errors、资源清单、阻断网址、错误原因、许可证核对。
 
 **现状**：浏览器隔离执行器已纳入代码；并未在这轮研究中真正完成全部第三方游戏的交互验证。网站静态“发现 HTML 入口”数量不可当作实测数。
+
+
+## 网络拦截的准确边界（2026-11-17 审查）
+
+在 Playwright 1.48 及以后版本中，`context.route_web_socket` 可拦截新的 WebSocket。运行器现在**要求该接口存在**，并关闭所有 WebSocket；同时记录被阻断的外部 HTTP、WebSocket、HTTP 4xx/5xx 和加载失败请求。凡是有阻断请求/控制台错误的测试不能标为 BROWSER_LOAD_CHECKED。
+
+**重要：** Playwright 的网络路由不是操作系统防火墙，无法严格证明所有 WebRTC/UDP、浏览器内部网络功能都无法访问外网。真正运行不可信第三方程序时，应在无出站网络权限的 disposable VM/网络命名空间内进行，并确保没有主机文件挂载、登录 Cookie、密钥或本机服务。单凭 iframe sandbox 不足以承诺恶意代码 100% 安全。
+
+官方接口：https://playwright.dev/python/docs/api/class-browsercontext#browser-context-route-web-socket
+

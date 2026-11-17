@@ -6,6 +6,7 @@ import re
 import sqlite3
 from pathlib import Path
 from urllib.parse import urlparse
+from refresh_research import load_current_pair
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data" / "research" / "v1"
@@ -63,6 +64,27 @@ CREATE TABLE IF NOT EXISTS research_browser_runs (
  blocked_requests TEXT NOT NULL, screenshot_path TEXT,
  FOREIGN KEY(work_id) REFERENCES research_works(work_id)
 );
+-- Curated adjudications are independent of snapshots and survive every re-import.
+CREATE TABLE IF NOT EXISTS research_work_reviews (
+ work_id TEXT PRIMARY KEY REFERENCES research_works(work_id) ON DELETE CASCADE,
+ review_status TEXT NOT NULL CHECK(review_status IN ('APPROVED','DRAFT','REJECTED')),
+ evidence_url TEXT NOT NULL,
+ entry_path TEXT, entry_status TEXT, prompt_status TEXT,
+ human_contribution TEXT, human_status TEXT, model_evidence TEXT,
+ external_dependencies TEXT, reviewer_note TEXT NOT NULL DEFAULT '',
+ reviewed_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS research_post_reviews (
+ post_key TEXT PRIMARY KEY REFERENCES research_posts(post_key) ON DELETE CASCADE,
+ review_status TEXT NOT NULL CHECK(review_status IN ('APPROVED','DRAFT','REJECTED')),
+ evidence_url TEXT NOT NULL,
+ work_id TEXT REFERENCES research_works(work_id),
+ entity_id TEXT, confidence TEXT, reviewer_note TEXT NOT NULL DEFAULT '',
+ reviewed_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS research_ingest_meta (
+ key TEXT PRIMARY KEY, value TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_research_posts_entity ON research_posts(entity_id);
 CREATE INDEX IF NOT EXISTS idx_research_posts_work ON research_posts(work_id);
 CREATE INDEX IF NOT EXISTS idx_research_sources_post ON research_source_records(post_id);
@@ -86,11 +108,12 @@ REVIEWED_ENTRIES = {
 REVIEWED_ENTRIES = {(r.lower(), t.casefold()): p for (r,t),p in REVIEWED_ENTRIES.items()}
 
 def read(name: str) -> dict:
-    # Dynamic updates are separate from the immutable v1 investigation snapshot.
-    current = ROOT / "data" / "research" / "current" / name
-    path = current if name in ("sources.json", "entities.json") and current.is_file() else DATA / name
-    obj = json.loads(path.read_text(encoding="utf-8"))
-    if obj.get("schema_version") != 1 or not isinstance(obj.get("records"), list):
+    if name in ("sources.json", "entities.json"):
+        pair=load_current_pair()
+        return pair[0] if name=="sources.json" else pair[1]
+    path=DATA/name
+    obj=json.loads(path.read_text(encoding="utf-8"))
+    if obj.get("schema_version")!=1 or not isinstance(obj.get("records"),list):
         raise ValueError(f"Invalid research snapshot: {name}")
     return obj
 
@@ -107,6 +130,30 @@ def valid_url(url: str) -> str:
         pass
     return ""
 
+def classify_prompt_evidence(value: str) -> str:
+    """Negative statements like '未公开' must never become 'PUBLISHED'."""
+    description = (value or "").strip()
+    if re.match(r"^(?:是[:：]|已公开[:：]|原始提示词已公开)", description):
+        return "PUBLISHED_AUTHOR_MATERIAL"
+    if description.startswith(("部分", "有部分")):
+        return "PARTIAL_MATERIALS_NEED_REVIEW"
+    if "未发现" in description or "未公开" in description or "未提供" in description:
+        return "NOT_LOCATED"
+    return "NOT_VERIFIED"
+
+
+def reviewed_human_role(repository: str, title: str) -> tuple[str, str]:
+    """Explicit public self-reports only; never infer human working hours."""
+    repo = repository.casefold()
+    if repo == "sharpwizard/ironvale":
+        return ("Author reports 21 natural-language development requests; manual edits unverified.", "AUTHOR_SELF_REPORT")
+    if repo == "realcodebear/saltline-fable-5.2":
+        return ("Original creator reportedly claims one request and no human feedback; repository is a mirror.", "THIRD_PARTY_SUMMARY_UNVERIFIED")
+    if repo == "hahaliu1029/fable5.2demo" and "misremember" in title.casefold():
+        return ("Author notes later Codex-assisted image assets; human code editing unverified.", "AUTHOR_SELF_REPORT")
+    return ("UNKNOWN", "NOT_VERIFIED")
+
+
 def norm_title(s: str) -> str:
     return " ".join(str(s or "").casefold().split())
 
@@ -115,8 +162,9 @@ def ingest(conn: sqlite3.Connection) -> dict:
     conn.executescript(DDL)
     repos = read("repositories.json")["records"]
     works = read("works.json")["records"]
-    posts = read("entities.json")["records"]
-    sources = read("sources.json")["records"]
+    source_doc,entity_doc = load_current_pair()
+    posts = entity_doc["records"]
+    sources = source_doc["records"]
     claims = read("claims.json")["records"]
     audit = {str(r.get("GitHub仓库","")).lower():r for r in read("readme_audits.json")["records"]}
     repo_names = {}
@@ -148,7 +196,11 @@ def ingest(conn: sqlite3.Connection) -> dict:
             entry = REVIEWED_ENTRIES.get((repo_raw, norm_title(title)), "")
             review = audit.get(repo_raw, {})
             prompt_text = str(review.get("提示词公开情况") or "")
-            prompt = "AUTHOR_DOCUMENTED" if ("是：" in prompt_text or "公开" in prompt_text) else "NOT_VERIFIED"
+            prompt = classify_prompt_evidence(prompt_text)
+            human_text, human_status = reviewed_human_role(repo_raw,title)
+            model_statement = str(review.get("模型归属声明") or "")
+            model_evidence = ("AUTHOR_SELF_REPORT" if any(q in model_statement for q in ("README称","README声明","README明确"))
+                              else "COMMUNITY_CLAIM")
             conn.execute("""INSERT INTO research_works
                 (work_id,title,repository_full_name,demo_url,rendering_stack,build_method,
                 artifact_kind,human_contribution,human_status,external_dependencies,
@@ -166,14 +218,14 @@ def ingest(conn: sqlite3.Connection) -> dict:
                 (r.get("work_id"),title,full_name,valid_url(r.get("试玩URL")),
                  r.get("渲染栈（原清单）"),r.get("构建方式（原清单）"),
                  r.get("交付形态（原清单）"),
-                 str(review.get("模型归属声明") or "UNKNOWN")[:1200],
-                 "AUTHOR_DESCRIPTION_ONLY" if review else "NOT_VERIFIED",
+                 human_text,
+                 human_status,
                  str(review.get("外部依赖与运行条件") or "NOT_VERIFIED")[:1200],
                  prompt,
                  {"sharpwizard/ironvale":"https://github.com/SharpWizard/ironvale/blob/main/PROMPTS.md",
                   "wquguru/fable52-fps-repro":"https://github.com/wquguru/fable52-fps-repro/tree/main/prompts"}.get(repo_raw,""),
                  entry,"TREE_PATH_REVIEWED_NOT_EXECUTED" if entry else "UNVERIFIED",
-                 "COMMUNITY_CLAIM",valid_url(r.get("GitHub仓库"))))
+                 model_evidence,valid_url(r.get("GitHub仓库"))))
         for r in posts:
             post_id = str(r.get("post_id") or "")
             key = post_id if re.fullmatch(r"\d+",post_id) else "orphan:" + post_id
@@ -199,6 +251,8 @@ def ingest(conn: sqlite3.Connection) -> dict:
                  work_id,r.get("match_status"),r.get("match_method"),
                  r.get("entity_resolution_status"),r.get("confidence"),r.get("model_claim"),
                  json.dumps(play,ensure_ascii=False),json.dumps(rr,ensure_ascii=False)))
+        # Replace only current source observations; immutable JSON snapshots remain the history.
+        conn.execute("DELETE FROM research_source_records")
         for r in sources:
             conn.execute("""INSERT INTO research_source_records
                 (source,source_id,post_id,post_url,title,category,author,play_url,repo_url,source_url)
@@ -225,8 +279,12 @@ def ingest(conn: sqlite3.Connection) -> dict:
                  r.get("证据状态"),r.get("模型记录建议"),r.get("项目关系建议"),
                  valid_url(r.get("证据来源链接")),valid_url(r.get("原帖/补充链接")),
                  r.get("仍需核实")))
+        conn.execute("""INSERT INTO research_ingest_meta(key,value)
+            VALUES('captured_at',?)
+            ON CONFLICT(key) DO UPDATE SET value=excluded.value""",
+            (source_doc.get("captured_at") or source_doc.get("snapshot_date") or "unknown",))
         # Exact repo + title only. No fuzzy matches and no migration of Fable model claims.
-        conn.execute("DELETE FROM research_project_links")
+        conn.execute("DELETE FROM research_project_links WHERE method='EXACT_REPO_AND_TITLE'")
         for r in conn.execute("""SELECT p.id AS project_id,p.title AS title,
               r.full_name AS repo FROM projects p JOIN project_repositories pr ON pr.project_id=p.id
               JOIN repositories r ON r.id=pr.repository_id""").fetchall():
@@ -234,6 +292,10 @@ def ingest(conn: sqlite3.Connection) -> dict:
                 if norm_title(r["title"])==norm_title(w["title"]):
                     conn.execute("INSERT OR IGNORE INTO research_project_links VALUES (?,?,?)",
                                  (r["project_id"],w["work_id"],"EXACT_REPO_AND_TITLE"))
+    from review_evidence import apply_manifest
+    review_file=ROOT / "config" / "research_reviews.json"
+    if review_file.is_file():
+        apply_manifest(conn,review_file)
     return counts(conn)
 
 def counts(conn: sqlite3.Connection) -> dict:
@@ -253,12 +315,37 @@ def export_projection(conn: sqlite3.Connection) -> dict:
         r.relation AS repository_relation,r.license_state,r.review_level,r.readme_url,
         r.browser_status FROM research_works w LEFT JOIN research_repositories r
         ON r.full_name=w.repository_full_name ORDER BY w.work_id""")
+    reviews = {row["work_id"]: dict(row) for row in conn.execute(
+        "SELECT * FROM research_work_reviews WHERE review_status='APPROVED' AND evidence_url<>''")}
+    for w in works:
+        reviewed = reviews.get(w["work_id"])
+        if reviewed:
+            for col in ("entry_path","entry_status","prompt_status","human_contribution",
+                        "human_status","model_evidence","external_dependencies"):
+                if reviewed[col] is not None:
+                    w[col] = reviewed[col]
+            w["review_status"] = "APPROVED"
+            w["review_evidence_url"] = reviewed["evidence_url"]
+            w["reviewed_at"] = reviewed["reviewed_at"]
+        else:
+            w["review_status"] = "UNREVIEWED"
     for w in works:
         w["evidence_level"]="READ_ME_REVIEWED" if w["review_level"]=="README_REVIEWED" else "COMMUNITY_INDEX_ONLY"
         w["execution_verified"]=False  # Never promote static entry detection into actual gameplay verification.
     posts=objs("""SELECT post_key,entity_id,post_url,title,creator,category,sources,
         kind_signal,work_id,match_status,entity_status,confidence,model_claim,play_urls,repo_urls
         FROM research_posts ORDER BY post_key""")
+    post_reviews = {row["post_key"]: dict(row) for row in conn.execute(
+        "SELECT * FROM research_post_reviews WHERE review_status='APPROVED' AND evidence_url<>''")}
+    for p in posts:
+        reviewed = post_reviews.get(p["post_key"])
+        if reviewed:
+            for col in ("entity_id","work_id","confidence"):
+                if reviewed[col] is not None: p[col] = reviewed[col]
+            p["review_status"] = "APPROVED"
+            p["review_evidence_url"] = reviewed["evidence_url"]
+            p["reviewed_at"] = reviewed["reviewed_at"]
+        else: p["review_status"] = "UNREVIEWED"
     for p in posts:
         p["play_urls"]=json.loads(p["play_urls"]);p["repo_urls"]=json.loads(p["repo_urls"])
     repos=objs("""SELECT full_name,display_title,source_channel,relation,tech,browser_hint,
@@ -266,7 +353,7 @@ def export_projection(conn: sqlite3.Connection) -> dict:
         FROM research_repositories ORDER BY lower(full_name)""")
     claims=objs("""SELECT * FROM research_claims ORDER BY claim_id""")
     stats=counts(conn)
-    return {"schema_version":1,"captured_at":"2026-11-17",
+    return {"schema_version":1,"captured_at":conn.execute("SELECT value FROM research_ingest_meta WHERE key='captured_at'").fetchone()[0],
             "warning":"Source records, original posts and works are different units. No third-party gameplay has been executed or verified.",
             "stats":stats,"works":works,"posts":posts,"repositories":repos,
             "claims":claims}

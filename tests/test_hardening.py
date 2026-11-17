@@ -61,6 +61,40 @@ class CollectorHardeningTests(unittest.TestCase):
         self.assertEqual((existing/'keep.txt').read_text(),'valuable')
         self.assertFalse(list((self.base/'snapshot').glob('.partial-*')))
 
+    def test_failed_repo_refresh_rolls_back_filesystem_and_sqlite(self):
+        from db import connect, now
+        (self.repo/'index.html').write_text('<!doctype html><title>new</title>')
+        self.track()
+        original=self.base/'snapshot/example__game'
+        original.mkdir(parents=True)
+        (original/'keep.html').write_text('<title>previous snapshot</title>')
+        conn=connect(self.base/'catalog.sqlite')
+        conn.execute("""INSERT INTO projects(id,slug,title,created_at,updated_at)
+                        VALUES('project-test','project-test','Sample',?,?)""",(now(),now()))
+        conn.execute("""INSERT INTO repositories(full_name,owner,name,html_url,clone_url,
+                          clone_status,clone_path,commit_sha)
+                        VALUES('example/game','example','game','https://github.com/example/game',
+                               'https://github.com/example/game.git','cloned',?,'old-sha')""",
+                     (str(original),))
+        rid=conn.execute("SELECT id FROM repositories WHERE full_name='example/game'").fetchone()[0]
+        conn.execute("INSERT INTO project_repositories(project_id,repository_id) VALUES('project-test',?)",(rid,))
+        conn.execute("""INSERT INTO repository_files(repository_id,relative_path,extension,sha256)
+                        VALUES(?,'keep.html','.html','original-hash')""",(rid,))
+        conn.commit()
+        row=conn.execute("SELECT * FROM repositories WHERE id=?",(rid,)).fetchone()
+        with patch.object(collector,'DEST',self.base/'snapshot'),patch.object(collector,'clone_one',return_value=(self.repo,'new-sha','main')),patch.object(collector,'choose_entry',side_effect=RuntimeError('simulated post-copy DB failure')):
+            result=collector.process_repo(conn,None,row,None,False,True,10_000,100_000)
+        self.assertEqual(result["status"],"error")
+        self.assertEqual((original/'keep.html').read_text(),'<title>previous snapshot</title>')
+        self.assertFalse((original/'index.html').exists())
+        status=conn.execute("SELECT clone_status,commit_sha,error_message FROM repositories WHERE id=?",(rid,)).fetchone()
+        self.assertEqual(status["clone_status"],"cloned")
+        self.assertEqual(status["commit_sha"],"old-sha")
+        self.assertIn("refresh_failed_preserved",status["error_message"])
+        paths=[r[0] for r in conn.execute("SELECT relative_path FROM repository_files WHERE repository_id=?",(rid,))]
+        self.assertEqual(paths,["keep.html"])
+        conn.close()
+
     def test_assets_relative_parent_allowed_but_escape_rejected(self):
         (self.repo/'games').mkdir()
         (self.repo/'shared').mkdir()
@@ -89,10 +123,10 @@ class PublisherTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def publish(self,allow=False,max_size=1024*1024):
+    def publish(self,allow=False,max_size=1024*1024,preview=False):
         (self.base/'config/publication_approvals.json').write_text(json.dumps({'approved_repositories':['example/game'] if allow else []}))
         with patch.object(publisher,'ROOT',self.base),patch.object(publisher,'APPROVALS',self.base/'config/publication_approvals.json'),patch.object(publisher,'connect',return_value=MagicMock()),patch.object(publisher,'export_catalog',return_value=copy.deepcopy(self.data)):
-            result=publisher.build_site(max_site_bytes=max_size)
+            result=publisher.build_site(include_unapproved=preview,max_site_bytes=max_size)
             public=json.loads((self.base/'site/data/catalog.json').read_text())
             return result,public
 
@@ -111,6 +145,75 @@ class PublisherTests(unittest.TestCase):
     def test_publication_size_cap_enforced(self):
         with self.assertRaisesRegex(RuntimeError,'Pages artifact'):
             self.publish(allow=True,max_size=5)
+
+    def test_approved_snapshots_never_copy_secrets_or_executable_scripts(self):
+        path=self.base/'games/_repos/example__game'
+        (path/'.env.production').write_text('DO_NOT_PUBLISH=secret')
+        (path/'credentials.json').write_text('{"token":"secret"}')
+        (path/'run.sh').write_text('echo not a web asset')
+        (path/'image.svg').write_text('<svg/>')
+        self.publish(allow=True)
+        site=self.base/'site/games/_repos/example__game'
+        self.assertFalse((site/'.env.production').exists())
+        self.assertFalse((site/'credentials.json').exists())
+        self.assertFalse((site/'run.sh').exists())
+        self.assertTrue((site/'index.html').exists())
+        self.assertTrue((site/'image.svg').exists())
+
+    def test_approved_snapshot_symlink_escape_fails_closed_and_keeps_old_site(self):
+        source=self.base/'games/_repos/example__game'
+        outside=self.base/'outside.txt'
+        outside.write_text('PRIVATE')
+        (source/'escape.json').symlink_to(outside)
+        old=self.base/'site/games/_repos/example__game'
+        old.mkdir(parents=True)
+        (old/'keep.html').write_text('previous snapshot')
+        with self.assertRaisesRegex(RuntimeError,"symlink"):
+            self.publish(allow=True)
+        self.assertEqual((old/'keep.html').read_text(),'previous snapshot')
+        self.assertFalse((old/'escape.json').exists())
+
+    def test_reject_invalid_publishing_approvals(self):
+        path=self.base/'config/publication_approvals.json'
+        path.write_text(json.dumps({'approved_repositories':['../../etc/passwd']}))
+        with self.assertRaisesRegex(ValueError,"approved_repositories"):
+            with patch.object(publisher,'APPROVALS',path):
+                publisher.publishable_repositories()
+
+    def test_preview_unapproved_forbidden_on_ci(self):
+        with patch.dict('os.environ',{'CI':'true'}):
+            with self.assertRaisesRegex(RuntimeError,"CI or Pages"):
+                self.publish(allow=False,preview=True)
+
+    def test_publication_limit_does_not_destroy_previous_snapshot(self):
+        old=self.base/'site/games/_repos/example__game'
+        old.mkdir(parents=True)
+        (old/'keep.html').write_text('old copy')
+        with self.assertRaisesRegex(RuntimeError,"Pages artifact"):
+            self.publish(allow=True,max_size=5)
+        self.assertEqual((old/'keep.html').read_text(),'old copy')
+
+    def test_metadata_write_failure_recovers_old_games_and_catalog(self):
+        site=self.base/'site'
+        previous=site/'games/_repos/example__game'
+        previous.mkdir(parents=True)
+        (previous/'keep.html').write_text('previous-version')
+        (site/'data').mkdir(exist_ok=True)
+        (site/'data/catalog.json').write_text('{"original":true}')
+        actual_replace=publisher.os.replace
+        triggered=[]
+        def break_once(source,target):
+            if str(target).endswith('data/summary.json') and not triggered:
+                triggered.append(True)
+                raise OSError('simulated metadata write failure')
+            return actual_replace(source,target)
+        with patch.object(publisher.os,'replace',side_effect=break_once):
+            with self.assertRaisesRegex(OSError,'simulated metadata'):
+                self.publish(allow=True)
+        self.assertTrue(triggered)
+        self.assertEqual((previous/'keep.html').read_text(),'previous-version')
+        self.assertFalse((previous/'index.html').exists())
+        self.assertEqual((site/'data/catalog.json').read_text(),'{"original":true}')
 
     def test_player_is_not_same_origin_with_untrusted_game(self):
         html=(ROOT/'site/index.html').read_text()

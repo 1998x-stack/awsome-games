@@ -27,3 +27,13 @@
 GitHub Pages 已发布网站的官方上限为 1GB。本项目在 build_site 阶段默认设置 850 MiB 容量阈值。单个上游仓库的采集上限不是整个 Pages 的许可用量；不应盲目把所有游戏完整快照上传到公开仓库。
 
 https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits
+
+
+## 增量发布审计（2026-11-17）
+
+新版 Pages 工程在发布之前会执行 Python 单元测试、研究数据库校验、JavaScript 语法检查。默认审批列表为空，**公开可玩游戏数可以为零**，不应将数据库里有 HTML 文件误当成已经发布/实测的游戏。
+
+只有 `config/publication_approvals.json` 明确列出的仓库会进入本站可执行游戏区。批准后的文件仍经过静态类型、敏感路径、symlink、容量检查。若发布中途出现数据写入错误，应恢复此前站点的游戏与数据目录。
+
+同源静态 HTML 的直接访问仍需要独立 Origin 才能完全隔离，因此建议将公开可执行游戏托管到与目录站点不同的域名。只用 `sandbox` iframe 并不等于安全审查完成。
+

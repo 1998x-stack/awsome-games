@@ -59,8 +59,8 @@ def smoke(root: Path, entry: str, screenshot: Path | None=None, timeout_ms: int=
     port=server.server_address[1]
     result={"tested_at":datetime.now(timezone.utc).isoformat(),"entry":entry,"status":"NOT_RUN",
             "iframe_isolation":False,"frame_body_loaded":False,"console_errors":[],
-            "blocked_requests":[],"failed_requests":[],"screenshot":None,
-            "gameplay_verified":False,"network_policy":"loopback_only"}
+            "blocked_requests":[],"blocked_websockets":[],"failed_requests":[],"http_errors":[],"screenshot":None,
+            "gameplay_verified":False,"network_policy":"browser-level loopback-only HTTP; websocket denied; OS network namespace still required"}
     browser=None
     try:
         with sync_playwright() as p:
@@ -78,10 +78,20 @@ def smoke(root: Path, entry: str, screenshot: Path | None=None, timeout_ms: int=
                     result["blocked_requests"].append(route.request.url)
                     route.abort()
             ctx.route("**/*",secure_route)
+            # HTTP request interception does not intercept WebSocket handshakes.
+            # Fail closed on old Playwright rather than silently allowing egress.
+            if not hasattr(ctx,"route_web_socket"):
+                raise RuntimeError("Playwright >= 1.48 is required for WebSocket isolation")
+            def close_websocket(ws):
+                result["blocked_websockets"].append(ws.url)
+                ws.close()
+            ctx.route_web_socket("**/*",close_websocket)
             page=ctx.new_page()
             page.on("console",lambda msg: result["console_errors"].append(msg.text) if msg.type=="error" else None)
             page.on("pageerror",lambda ex:result["console_errors"].append(str(ex)))
             page.on("requestfailed",lambda req:result["failed_requests"].append(req.url))
+            page.on("response",lambda response:result["http_errors"].append(
+                {"url":response.url,"status":response.status}) if response.status>=400 else None)
             page.goto("http://127.0.0.1:"+str(port)+"/__isolated_smoke_host__",
                       wait_until="domcontentloaded",timeout=timeout_ms)
             page.locator("iframe").wait_for(timeout=timeout_ms)
@@ -97,7 +107,11 @@ def smoke(root: Path, entry: str, screenshot: Path | None=None, timeout_ms: int=
                 screenshot.parent.mkdir(parents=True,exist_ok=True)
                 page.screenshot(path=str(screenshot),full_page=True)
                 result["screenshot"]=str(screenshot)
-            result["status"]="BROWSER_LOAD_CHECKED" if result["frame_body_loaded"] and result["iframe_isolation"] and not result["console_errors"] and not result["blocked_requests"] else "INCOMPLETE_OR_FAILED"
+            load_ok=(result["frame_body_loaded"] and result["iframe_isolation"]
+                     and not result["console_errors"] and not result["blocked_requests"]
+                     and not result["blocked_websockets"] and not result["failed_requests"]
+                     and not result["http_errors"])
+            result["status"]="BROWSER_LOAD_CHECKED" if load_ok else "INCOMPLETE_OR_FAILED"
             ctx.close()
             browser.close()
             browser=None

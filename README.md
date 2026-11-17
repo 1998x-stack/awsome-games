@@ -19,7 +19,7 @@
 | 社区作品—仓库映射 | 64 | 仅保守精确关联到现有 155 条项目 |
 | 重点归属反证 | 12 | 模型版本冲突、错误仓库归属及多模型协作 |
 
-新增的 **[Evidence Lab 在线研究页](site/research.html)** 支持在四种不同粒度之间检索、查看原始证据、定位静态源码入口/交付形态、提示词信息、外部依赖、人工参与记录并导出 CSV。通过 Pages 构建后浏览 /research.html。
+新增的 **[Evidence Lab 在线研究页](site/research.html)** 支持在四种不同粒度之间检索、查看原始证据、定位静态源码入口/交付形态、提示词信息、外部依赖、人工参与记录并导出 CSV。通过 Pages 构建后浏览 /research.html。人工校正请写入 `config/research_reviews.json`，由 `scripts/review_evidence.py` 校验与保存独立审计历史。
 
 数据快照在 [data/research/v1/](data/research/v1/)，规范与审计报告见 [docs/RESEARCH_INTEGRATION.md](docs/RESEARCH_INTEGRATION.md)，隔离浏览器加载检查见 [docs/BROWSER_SMOKE.md](docs/BROWSER_SMOKE.md)。这些记录不会默认克隆或发布任何未经授权的第三方代码；**已审入口 ≠ 经过浏览器试玩验证**。请先运行以下命令生成站点投影：
 
@@ -178,24 +178,44 @@ python3 scripts/collect_repositories.py --max-file-mb 80 --max-total-mb 800
 网站支持：
 
 - 作品搜索、模型版本筛选、内容类型筛选、游戏分类筛选；
-- 按源码仓库、已采集源码、HTML 入口、在线演示筛选；
+- 按源码仓库、已采集源码、本站可试玩入口、在线演示筛选；
 - 查看仓库、作者帖子和原始演示；
-- 对已发现 HTML 入口的项目点击“尝试试玩”，在隔离 iframe 中运行；
+- 对经授权发布且有 HTML 入口的项目点击“尝试试玩”，在隔离 iframe 中运行；
 - 导出当前筛选结果 CSV。
 
 `entrypoint_found` 只表示找到了 HTML 文件且基本静态资源检查通过，不表示已人工验证可玩。需要构建步骤、后端或密钥的项目不会被错误标成可直接试玩。
 
+## 逐文件安全审查台账
+
+本轮实际源码审查、P0/P1 缺陷与修复核验见 [2026-11-17 逐文件审查报告](docs/AUDIT_2026-11-17.md)。请将测试通过与第三方游戏真正可玩严格区分。
+
+## 证据审核与隔离保护
+
+第三方索引的模型声明不是事实认证。模型归属、原始 Prompt、人工参与、入口路径和实际运行结果分别记录。编辑 `config/research_reviews.json` 后执行：
+
+```bash
+python3 scripts/review_evidence.py                     # 只校验，不写数据库
+python3 scripts/review_evidence.py --apply              # 显式确认才写入
+python3 scripts/build_catalog.py --check
+python3 scripts/build_site.py
+```
+
+审核记录必须附上直接的 HTTPS 来源。数据库保留 `research_review_history` 修改历史；重新导入社区来源不会覆盖人工审核层。浏览器测试器见 [docs/BROWSER_SMOKE.md](docs/BROWSER_SMOKE.md)，HTTP 与 WebSocket 均进行浏览器层拦截，但仍必须在无密钥、无外网的隔离容器/VM 中运行。**浏览器加载成功不等于作品真正可玩。**
+
+旧版 `refresh_community_indexes.py` 仍可用于实验性候选归并，但其输出隔离在 `data/community/`；不得把它直接当作正式去重作品表。
+
 ## 数据更新
 
 ```bash
-# 重新抓取公开社区索引并导入
-python3 scripts/refresh_community_indexes.py --online
-python3 scripts/build_catalog.py --seed data/projects.jsonl
+# 先只比较四个主来源，默认不写库
+bash scripts/refresh_all.sh --dry-run
 
-# 克隆新增仓库并刷新网站
-python3 scripts/collect_repositories.py
-python3 scripts/build_catalog.py
-python3 scripts/build_site.py
+# 核对来源更新后再写入版本化证据快照并重新构建
+bash scripts/refresh_all.sh --write
+
+# 如需重新采集第三方源码，需要单独授权并显式执行
+python3 scripts/collect_repositories.py --dry-run
+python3 scripts/collect_repositories.py --repo OWNER/REPO
 ```
 
 可选设置 `GITHUB_TOKEN` 提高 GitHub API 速率限制。只需公开仓库只读权限；不要把 Token 写入代码、配置文件或提交记录。

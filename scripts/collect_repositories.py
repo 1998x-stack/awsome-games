@@ -90,7 +90,7 @@ def clone_one(full_name, force=False):
     return cache, sha, branch
 
 
-def copy_tracked_tree(full_name, repo_dir, max_file_bytes, max_total_bytes):
+def copy_tracked_tree(full_name, repo_dir, max_file_bytes, max_total_bytes, hold_backup=False):
     """Stage tracked files and publish atomically; never follow source symlinks."""
     DEST.mkdir(parents=True,exist_ok=True)
     name = repo_dir_name(full_name)
@@ -136,7 +136,9 @@ def copy_tracked_tree(full_name, repo_dir, max_file_bytes, max_total_bytes):
         except Exception:
             if backup.exists(): backup.rename(dest)
             raise
-        if backup.exists(): shutil.rmtree(backup)
+        if backup.exists() and not hold_backup: shutil.rmtree(backup)
+        if hold_backup:
+            return dest,files,total,skipped,(backup if backup.exists() else None)
         return dest,files,total,skipped
     finally:
         if stage.exists(): shutil.rmtree(stage)
@@ -187,7 +189,9 @@ def choose_entry(project, html_paths, project_count):
     override = OVERRIDES.get(project['id']) or OVERRIDES.get(project['slug']) or {}
     explicit = override.get('entry_path') or project['entry_path']
     if explicit:
-        explicit = explicit.lstrip('./')
+        # Never repair ../ or ./ by stripping characters; reject ambiguous paths.
+        explicit = safe_rel_path(explicit)
+        if explicit is None: return '', 'unsafe_explicit_entry'
         if explicit in html_paths: return explicit,'explicit_override' if override.get('entry_path') else 'source_link'
         return '', 'missing_explicit_entry'
     if not html_paths: return '', 'no_html_entrypoint'
@@ -223,10 +227,15 @@ def choose_entry(project, html_paths, project_count):
 
 def process_repo(conn, run_id, repo_row, session, force, skip_api, max_file_bytes, max_total_bytes):
     full=repo_row['full_name']
+    snapshot=None
+    restore_point=None
+    database_committed=False
     try:
         meta = {} if skip_api else api_metadata(full,session)
         cache,sha,branch = clone_one(full,force=force)
-        dest,files,total,skipped = copy_tracked_tree(full,cache,max_file_bytes,max_total_bytes)
+        dest,files,total,skipped,restore_point = copy_tracked_tree(
+            full,cache,max_file_bytes,max_total_bytes,hold_backup=True)
+        snapshot=dest
         updates={
           'clone_status':'cloned','clone_path':str(dest.relative_to(ROOT)).replace('\\','/'),
           'commit_sha':sha,'cloned_at':now(),'last_checked_at':now(),'error_message':'',
@@ -267,11 +276,30 @@ def process_repo(conn, run_id, repo_row, session, force, skip_api, max_file_byte
                   'requires_build' if 'requires_build' in statuses else 'needs_review')
             conn.execute('UPDATE projects SET source_status=?,playable_status=?,updated_at=? WHERE id=?',('cloned',best,now(),pid))
         conn.commit()
+        database_committed=True
+        if restore_point and restore_point.exists():
+            try: shutil.rmtree(restore_point)
+            except OSError: pass  # Metadata already committed; do not undo a good snapshot.
         return {'repo':full,'status':'cloned','commit':sha,'files':len(files),'html_files':len(html_paths),'bytes':total,'selected_entrypoints':sum(1 for x in selected if x[4]=='entrypoint_found'),'skipped':skipped}
     except Exception as exc:
-        conn.execute("UPDATE repositories SET clone_status='error',last_checked_at=?,error_message=? WHERE id=?",(now(),str(exc)[:3000],repo_row['id']))
+        # Never commit partially written repository_files or project entry mappings.
+        conn.rollback()
+        if snapshot is not None and not database_committed:
+            try:
+                if snapshot.exists():shutil.rmtree(snapshot)
+                if restore_point and restore_point.exists():
+                    restore_point.rename(snapshot)
+            except OSError as restore_error:
+                # Log the recovery failure, not an inaccurate claim of a clean rollback.
+                log_error(conn,run_id,full,'','snapshot_restore',restore_error)
+        old_snapshot=(ROOT/str(repo_row["clone_path"])).is_dir() if repo_row["clone_path"] else False
+        if repo_row["clone_status"]=="cloned" and old_snapshot:
+            conn.execute("UPDATE repositories SET last_checked_at=?,error_message=? WHERE id=?",
+                         (now(),"refresh_failed_preserved: "+str(exc)[:2700],repo_row["id"]))
+        else:
+            conn.execute("UPDATE repositories SET clone_status='error',last_checked_at=?,error_message=? WHERE id=?",
+                         (now(),str(exc)[:3000],repo_row["id"]))
         log_error(conn,run_id,full,'','clone_or_inventory',exc)
-        conn.commit()
         return {'repo':full,'status':'error','error':str(exc)[:500]}
 
 

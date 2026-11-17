@@ -1,10 +1,12 @@
 name: Restore stable-ID seed snapshot
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/recover-seed.yml'
   workflow_dispatch:
+    inputs:
+      commit_reconstruction:
+        description: 'Explicitly commit the reconstructed seed back to main'
+        required: true
+        default: false
+        type: boolean
 permissions:
   contents: write
 jobs:
@@ -29,7 +31,8 @@ jobs:
           assert db_ids==seed_ids, 'Stable project IDs differ from SQLite snapshot'
           print('Recovered stable IDs:',len(rows))
           PY
-      - name: Commit canonical reconstructed seed only
+      - name: Commit reconstructed seed only after explicit approval
+        if: ${{ inputs.commit_reconstruction == true }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+1998x-stack@users.noreply.github.com'

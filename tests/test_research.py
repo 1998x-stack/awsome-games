@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts'))
 from db import connect, seed_database, SEED_PATH
-from research_pipeline import ingest, counts, export_projection, valid_url, repo_key, REVIEWED_ENTRIES
+from research_pipeline import ingest, counts, export_projection, valid_url, repo_key, REVIEWED_ENTRIES, classify_prompt_evidence
 from browser_smoke import clean_entry
 
 class ResearchIntegrationTests(unittest.TestCase):
@@ -62,6 +62,70 @@ class ResearchIntegrationTests(unittest.TestCase):
         self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM research_browser_runs").fetchone()[0],0)
         data=export_projection(self.conn)
         self.assertTrue(all(x["execution_verified"] is False for x in data["works"]))
+
+    def test_prompt_negation_and_human_contribution_semantics(self):
+        self.assertEqual(classify_prompt_evidence("未发现公开原始提示词"), "NOT_LOCATED")
+        self.assertEqual(classify_prompt_evidence("提示词未公开"), "NOT_LOCATED")
+        self.assertEqual(classify_prompt_evidence("是：PROMPTS.md列出21条提示词"), "PUBLISHED_AUTHOR_MATERIAL")
+        self.assertEqual(classify_prompt_evidence("部分需求原文、实现报告公开"), "PARTIAL_MATERIALS_NEED_REVIEW")
+        rows={x["repository_full_name"].casefold():x for x in self.conn.execute(
+            "SELECT * FROM research_works WHERE repository_full_name LIKE 'SharpWizard/%' OR repository_full_name LIKE 'realcodebear/%'")}
+        self.assertEqual(rows["realcodebear/saltline-fable-5.2"]["prompt_status"],"NOT_LOCATED")
+        self.assertEqual(rows["sharpwizard/ironvale"]["prompt_status"],"PUBLISHED_AUTHOR_MATERIAL")
+        self.assertIn("21",rows["sharpwizard/ironvale"]["human_contribution"])
+        self.assertNotIn("README称",rows["sharpwizard/ironvale"]["human_contribution"])
+
+    def test_approved_editorial_review_survives_snapshot_reimport(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            conn=connect(Path(tmp)/"curation.sqlite")
+            seed_database(conn,SEED_PATH)
+            ingest(conn)
+            conn.execute("""INSERT INTO research_work_reviews
+                (work_id,review_status,evidence_url,entry_path,prompt_status,
+                 human_contribution,reviewed_at)
+                VALUES(?,?,?,?,?,?,?)""",
+                ("F52-W001","APPROVED","https://github.com/example/evidence",
+                 "reviewed/index.html","PUBLISHED_AUTHOR_MATERIAL","Human edit witnessed","2026-11-17"))
+            first=conn.execute("SELECT post_key FROM research_posts WHERE post_key GLOB '[0-9]*' LIMIT 1").fetchone()[0]
+            conn.execute("""INSERT INTO research_post_reviews
+                (post_key,review_status,evidence_url,entity_id,confidence,reviewed_at)
+                VALUES(?,?,?,?,?,?)""",
+                (first,"APPROVED","https://example.org/specific-source",
+                 "CURATED-ENTITY","author_documentation","2026-11-17"))
+            conn.commit()
+            ingest(conn)
+            export=export_projection(conn)
+            work=next(w for w in export["works"] if w["work_id"]=="F52-W001")
+            post=next(p for p in export["posts"] if p["post_key"]==first)
+            self.assertEqual(work["entry_path"],"reviewed/index.html")
+            self.assertEqual(work["prompt_status"],"PUBLISHED_AUTHOR_MATERIAL")
+            self.assertEqual(work["review_status"],"APPROVED")
+            self.assertEqual(post["entity_id"],"CURATED-ENTITY")
+            self.assertEqual(post["review_status"],"APPROVED")
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM research_work_reviews").fetchone()[0],1)
+            conn.close()
+
+    def test_source_snapshot_replacement_does_not_falsify_count(self):
+        import research_pipeline
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as tmp:
+            conn=connect(Path(tmp)/"snapshot.sqlite")
+            seed_database(conn,SEED_PATH)
+            ingest(conn)
+            original=research_pipeline.load_current_pair
+            def one_pair():
+                source,entity=original()
+                source=dict(source)
+                source["records"]=source["records"][:7]
+                source["captured_at"]="2026-12-01"
+                return source,entity
+            with patch.object(research_pipeline,"load_current_pair",side_effect=one_pair):
+                stats=ingest(conn)
+                self.assertEqual(stats["source_records"],7)
+                self.assertEqual(export_projection(conn)["captured_at"],"2026-12-01")
+            self.assertEqual(conn.execute("SELECT COUNT(*) FROM research_source_records").fetchone()[0],7)
+            conn.close()
 
     def test_model_conflicts_are_not_promoted_to_fable(self):
         rows={x["item"]:x for x in self.conn.execute("SELECT * FROM research_claims")}

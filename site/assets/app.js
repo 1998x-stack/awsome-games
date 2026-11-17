@@ -44,7 +44,7 @@
     const hasRepo=(p.repositories||[]).length>0, hasEntry=!!p.published_game_path, hasDemo=(p.demos||[]).length>0;
     const repo=p.repositories?.[0]?.html_url || '';
     const demo=p.demos?.[0] || '';
-    const badge=hasEntry?'<span class="chip status-entry">HTML 入口已发现</span>':hasRepo?'<span class="chip status-repo">有源码仓库</span>':hasDemo?'<span class="chip status-demo">在线演示</span>':'<span class="chip">未找到源码</span>';
+    const badge=hasEntry?'<span class="chip status-entry">获准本站试玩</span>':hasRepo?'<span class="chip status-repo">有源码仓库</span>':hasDemo?'<span class="chip status-demo">在线演示</span>':'<span class="chip">未找到源码</span>';
     const model=p.model_version==='unknown'?'模型未标注':`Fable ${escapeHtml(p.model_version)}`;
     return `<article class="project-card">
       <div class="card-top"><span class="card-id">${escapeHtml(p.id)}</span><span class="model-tag">${model}</span></div>
@@ -88,7 +88,7 @@
   }
   function exportCsv() {
     const rows=state.visible, cols=['id','slug','title','model_version','content_type','categories','creator','source_status','playable_status','repositories','demos'];
-    const quote=x=>'"'+String(x??'').replaceAll('"','""')+'"';
+    const quote=x=>{let v=String(x??''); if (/^[=+@\t\r-]/.test(v)) v="'"+v; return '"'+v.replaceAll('"','""')+'"';};
     const lines=[cols,...rows.map(p=>[p.id,p.slug,p.title,p.model_version,p.content_type,(p.categories||[]).map(c=>c.name).join('; '),p.creator,p.source_status,p.playable_status,(p.repositories||[]).map(r=>r.full_name).join('; '),(p.demos||[]).join('; ')])];
     const blob=new Blob(['\ufeff'+lines.map(r=>r.map(quote).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='awsome-games-filtered.csv';a.click();URL.revokeObjectURL(a.href);
