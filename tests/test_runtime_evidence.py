@@ -31,7 +31,7 @@ class RuntimeEvidenceTests(unittest.TestCase):
             "work_id":"F52-W012","repo":"wquguru/fable52-fps-repro",
             "repository_commit_sha":"a"*40,"entry_path":"demos/04-fps/index.html",
             "source_file_full_text_read":True,
-            "entry_git_blob_sha":hashlib.sha1(b"blob "+str(len(buf)).encode()+b"\\x00"+buf).hexdigest()
+            "entry_git_blob_sha":hashlib.sha1(b"blob "+str(len(buf)).encode()+b"\x00"+buf).hexdigest()
         }),encoding="utf-8")
 
     @classmethod

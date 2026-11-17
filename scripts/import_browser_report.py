@@ -48,7 +48,7 @@ def require_pinned_audit(work_id: str, repo_name: str, commit_sha: str,
                 "entry_path":entry_path}
     if any(str(audit.get(k,"")).lower()!=str(v).lower() for k,v in expected.items()):
         raise ValueError("Pinned audit does not match repository, work, commit or entry")
-    actual_blob = hashlib.sha1(b"blob " + str(len(entry_data)).encode("ascii") + b"\\x00" + entry_data).hexdigest()
+    actual_blob = hashlib.sha1(b"blob " + str(len(entry_data)).encode("ascii") + b"\x00" + entry_data).hexdigest()
     if audit.get("entry_git_blob_sha","").lower()!=actual_blob:
         raise ValueError("Staged HTML Git blob does not match pinned source audit")
     if audit.get("source_file_full_text_read") is not True:
