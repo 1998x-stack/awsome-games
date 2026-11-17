@@ -148,9 +148,9 @@ def ingest(conn: sqlite3.Connection) -> dict:
             prompt = "AUTHOR_DOCUMENTED" if ("是：" in prompt_text or "公开" in prompt_text) else "NOT_VERIFIED"
             conn.execute("""INSERT INTO research_works
                 (work_id,title,repository_full_name,demo_url,rendering_stack,build_method,
-                artifact_kind,human_contribution,prompt_status,entry_path,entry_status,
-                model_evidence,source_url)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+                artifact_kind,human_contribution,human_status,external_dependencies,
+                prompt_status,prompt_evidence_url,entry_path,entry_status,model_evidence,source_url)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(work_id) DO UPDATE SET
                 title=excluded.title,repository_full_name=excluded.repository_full_name,
                 demo_url=excluded.demo_url,rendering_stack=excluded.rendering_stack,
