@@ -175,6 +175,10 @@ def apply_manifest(conn: sqlite3.Connection, manifest: Path = DEFAULT, dry_run=F
             existing=conn.execute(f"SELECT * FROM {table} WHERE {key}=?",(item[key],)).fetchone()
             prev=dict(existing) if existing else {}
             desired={field:item.get(field,prev.get(field)) for field in sorted(fields)}
+            # reviewer_note has a NOT NULL default in both tables, but supplying
+            # SQL NULL bypasses the column default for DRAFT/REJECTED reviews.
+            if desired.get("reviewer_note") is None:
+                desired["reviewer_note"] = ""
             desired[key]=item[key]
             desired["review_status"]=item["review_status"]
             desired["evidence_url"]=evidence or prev.get("evidence_url") or ""
