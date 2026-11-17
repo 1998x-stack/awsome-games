@@ -187,7 +187,9 @@ def choose_entry(project, html_paths, project_count):
     override = OVERRIDES.get(project['id']) or OVERRIDES.get(project['slug']) or {}
     explicit = override.get('entry_path') or project['entry_path']
     if explicit:
-        explicit = explicit.lstrip('./')
+        # Never repair ../ or ./ by stripping characters; reject ambiguous paths.
+        explicit = safe_rel_path(explicit)
+        if explicit is None: return '', 'unsafe_explicit_entry'
         if explicit in html_paths: return explicit,'explicit_override' if override.get('entry_path') else 'source_link'
         return '', 'missing_explicit_entry'
     if not html_paths: return '', 'no_html_entrypoint'
