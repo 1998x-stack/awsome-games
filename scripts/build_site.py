@@ -12,6 +12,8 @@ import sys
 from pathlib import Path
 from db import ROOT, connect
 from build_catalog import export_catalog
+from research_pipeline import ingest as ingest_research, export_projection
+import sqlite3
 
 APPROVALS = ROOT / 'config' / 'publication_approvals.json'
 
@@ -27,6 +29,11 @@ def publishable_repositories(config_path=None):
 
 def build_site(include_unapproved=False, max_site_bytes=850*1024*1024):
     conn=connect()
+    if isinstance(conn,sqlite3.Connection):
+        ingest_research(conn)
+        research=export_projection(conn)
+    else:
+        research=None  # isolated publisher tests use a mocked connection
     data=export_catalog(conn)
     conn.close()
     site=ROOT/'site'
@@ -63,6 +70,8 @@ def build_site(include_unapproved=False, max_site_bytes=850*1024*1024):
     data['publication_policy']='repository_opt_in'
     (site/'data/catalog.json').write_text(json.dumps(data,ensure_ascii=False,indent=2),encoding='utf-8')
     (site/'data/summary.json').write_text(json.dumps(data['summary'],ensure_ascii=False,indent=2),encoding='utf-8')
+    if research is not None:
+        (site/'data/research.json').write_text(json.dumps(research,ensure_ascii=False,separators=(',',':')),encoding='utf-8')
     (site/'.nojekyll').write_text('',encoding='utf-8')
     (site/'build-manifest.json').write_text(json.dumps({
         'generated_at':data['generated_at'],'repository_ref':data['repository_ref'],

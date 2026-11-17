@@ -4,10 +4,12 @@ from __future__ import annotations
 import argparse, csv, json, sqlite3, sys
 from pathlib import Path
 from db import ROOT, DB_PATH, connect, seed_database, now
+from research_pipeline import ingest as ingest_research, project_links
 
 
 def export_catalog(conn):
     projects=[]
+    known_research=project_links(conn) if conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='research_project_links'").fetchone() else {}
     rows=conn.execute("SELECT * FROM projects ORDER BY title COLLATE NOCASE").fetchall()
     for p in rows:
         cats=conn.execute("""SELECT c.id,c.name,c.group_name,pc.is_primary,pc.raw_label FROM project_categories pc JOIN categories c ON c.id=pc.category_id WHERE pc.project_id=? ORDER BY pc.is_primary DESC,c.name""",(p['id'],)).fetchall()
@@ -31,7 +33,8 @@ def export_catalog(conn):
           'demos':demos,'author_posts':author_posts,'prompts':[dict(x) for x in prompts],
           'evidence':[dict(x) for x in evidence],
           'local_game_path':local_repo['game_path'] if local_repo else '',
-          'local_entry_path':local_repo['entry_path'] if local_repo else ''
+          'local_entry_path':local_repo['entry_path'] if local_repo else '',
+          'research_work_ids':known_research.get(p['id'],[])
         })
     cats=[dict(x) for x in conn.execute("SELECT * FROM categories ORDER BY group_name,name")]
     repo_rows=[dict(x) for x in conn.execute("SELECT * FROM repositories ORDER BY full_name")]
@@ -86,6 +89,7 @@ def main():
             Path(str(DB_PATH)+ext).unlink(missing_ok=True)
     conn=connect()
     imported=seed_database(conn,args.seed)
+    research_stats=ingest_research(conn)
     if args.check:
         result=conn.execute('PRAGMA integrity_check').fetchone()[0]
         fk=conn.execute('PRAGMA foreign_key_check').fetchall()
@@ -93,6 +97,6 @@ def main():
         if result!='ok' or fk: sys.exit(1)
     data=export_catalog(conn)
     conn.close()
-    print(json.dumps({'seed_rows_processed':imported,**data['summary']},ensure_ascii=False,indent=2))
+    print(json.dumps({'seed_rows_processed':imported,'research':research_stats,**data['summary']},ensure_ascii=False,indent=2))
 
 if __name__=='__main__': main()

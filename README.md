@@ -6,6 +6,28 @@
 
 > 重要：本仓库不声称已经获得互联网上所有作品。当前数据是 2026-11-16 调查快照；作品数量、模型归属和源码关系会随着证据更新而变化。
 
+
+## Evidence Lab：新增的作品实体与反证层（2026-11-17）
+
+在原有的 **155 条项目 / 54 个去重仓库** 基线之外，新增了一套**不覆盖旧库**的证据研究数据层：
+
+| 新增研究单元 | 数量 | 为什么不能直接相加 |
+|---|---:|---|
+| 原索引事实性记录 | 1,118 | 同一 X 原帖可能出现在多个索引 |
+| 原帖实体线索 | 907 | 906 个原帖 ID + 1 条缺失 ID，尚未逐项确认独立作品 |
+| GitHub 候选地址 | 83 | 包含原创、镜像、工具、Pull Request 和非网页项目 |
+| 社区作品—仓库映射 | 64 | 仅保守精确关联到现有 155 条项目 |
+| 重点归属反证 | 12 | 模型版本冲突、错误仓库归属及多模型协作 |
+
+新增的 **[Evidence Lab 在线研究页](site/research.html)** 支持在四种不同粒度之间检索、查看原始证据、定位静态源码入口/交付形态、提示词信息、外部依赖、人工参与记录并导出 CSV。通过 Pages 构建后浏览 /research.html。
+
+数据快照在 [data/research/v1/](data/research/v1/)，规范与审计报告见 [docs/RESEARCH_INTEGRATION.md](docs/RESEARCH_INTEGRATION.md)，隔离浏览器加载检查见 [docs/BROWSER_SMOKE.md](docs/BROWSER_SMOKE.md)。这些记录不会默认克隆或发布任何未经授权的第三方代码；**已审入口 ≠ 经过浏览器试玩验证**。请先运行以下命令生成站点投影：
+
+    python3 scripts/build_catalog.py --check
+    python3 scripts/build_site.py
+    python3 -m unittest discover -s tests -v
+
+
 ## 当前首批数据
 
 | 指标 | 数量 | 说明 |

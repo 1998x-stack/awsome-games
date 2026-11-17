@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#10131b">
+<meta name="description" content="AI 创意游戏的原帖实体归并、源码入口、Prompt、模型归属和反证记录。">
+<title>Evidence Lab · Awsome Games</title>
+<link rel="stylesheet" href="./assets/style.css">
+<link rel="stylesheet" href="./assets/research.css">
+</head>
+<body>
+<header class="hero research-hero"><div class="hero-inner">
+ <div class="eyebrow"><span class="pulse"></span> EVIDENCE-FIRST GAME RESEARCH</div>
+ <h1>Evidence <span>Lab.</span></h1>
+ <p class="hero-copy">从链接合集走向可追溯的工程研究：区分原帖、作品、仓库、镜像、构建产物与不同模型的真实贡献。</p>
+ <div class="hero-links"><a href="./index.html">← 返回游戏目录</a><a href="https://github.com/1998x-stack/awsome-games/tree/main/docs" target="_blank" rel="noopener noreferrer">工程与审计文档 ↗</a><a href="https://docs.google.com/spreadsheets/d/1iIa0wVLh1ux-7y8VDlH9aZYsuIxpVBLz3LekmOwQtEY/edit" target="_blank" rel="noopener noreferrer">原始研究工作簿 ↗</a></div>
+</div></header>
+<main class="page-shell">
+ <p class="lab-warning">研究数据不等于原创权利证明。网页入口已定位 ≠ 游戏实测可玩；社区模型标签 ≠ 作者证据；未经授权的第三方代码不在本站执行。</p>
+ <section id="lab-stats" class="lab-stats" aria-label="研究统计">
+  <div class="lab-stat"><strong id="n-source">—</strong><span>原始来源记录</span></div>
+  <div class="lab-stat"><strong id="n-posts">—</strong><span>原帖实体线索</span></div>
+  <div class="lab-stat"><strong id="n-works">—</strong><span>源码作品映射</span></div>
+  <div class="lab-stat"><strong id="n-repos">—</strong><span>候选 GitHub 仓库</span></div>
+  <div class="lab-stat"><strong id="n-claims">—</strong><span>重点归属冲突</span></div>
+ </section>
+ <section class="lab-head">
+  <div><div class="section-kicker">TRACEABLE RESEARCH</div><h2>研究对象</h2><p id="lab-caption">正在加载数据…</p></div>
+  <button id="lab-export" class="quiet-button" type="button">导出当前 CSV ↓</button>
+ </section>
+ <nav id="lab-tabs" class="lab-tabs" aria-label="研究对象分类">
+  <button type="button" data-kind="works" aria-current="page">作品工程 <span id="count-works"></span></button>
+  <button type="button" data-kind="posts">原帖线索 <span id="count-posts"></span></button>
+  <button type="button" data-kind="repositories">GitHub 仓库 <span id="count-repositories"></span></button>
+  <button type="button" data-kind="claims">反证台账 <span id="count-claims"></span></button>
+ </nav>
+ <div class="lab-filters">
+  <label class="lab-search"><span aria-hidden="true">⌕</span><input id="lab-search" type="search" placeholder="搜索作品、原帖ID、仓库、Prompt、证据…" autocomplete="off"></label>
+  <select id="lab-filter" aria-label="证据状态"><option value="">全部证据状态</option></select>
+ </div>
+ <div id="lab-status" class="lab-status" aria-live="polite"></div>
+ <section id="lab-results" class="lab-results" aria-live="polite"><p class="lab-loading">数据载入中…</p></section>
+ <div class="lab-more"><button id="lab-more" type="button" hidden>加载更多条目</button></div>
+ <footer class="site-footer"><div><strong>Awsome Games · Evidence Lab</strong><span>2026-11-17 采集快照 | 版本与授权保守标注</span></div><p>本界面只显示公开来源的事实性元数据与审计摘要。未执行外部代码；浏览器 Smoke Test 与实际可玩性分别记录。</p></footer>
+</main>
+<dialog id="lab-detail" class="lab-dialog"><div class="lab-modal-head"><span class="section-kicker">EVIDENCE DETAIL</span><button type="button" id="lab-close" aria-label="关闭证据详情">✕</button></div><div id="lab-detail-body"></div></dialog>
+<script src="./assets/research.js" defer></script>
+</body>
+</html>
