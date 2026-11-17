@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#10131b">
+<meta name="description" content="待审核的原帖、作品、源码仓库与别名关系。所有队列均为线索而非验证结论。">
+<title>Review Queue · Awsome Games</title>
+<link rel="stylesheet" href="./assets/style.css"><link rel="stylesheet" href="./assets/research.css">
+</head>
+<body>
+<header class="hero research-hero"><div class="hero-inner">
+<div class="eyebrow"><span class="pulse"></span> EVIDENCE REVIEW WORKFLOW</div>
+<h1>Review <span>Queue.</span></h1>
+<p class="hero-copy">逐项检查实体归并、工程入口、模型贡献与发布授权。审核线索默认未验证，不自动执行第三方源码。</p>
+<div class="hero-links"><a href="./index.html">← 游戏目录</a><a href="./research.html">Evidence Lab ↗</a><a href="https://github.com/1998x-stack/awsome-games/blob/main/docs/MILESTONES_M1_M5.md" target="_blank" rel="noopener noreferrer">审核流程文档 ↗</a></div>
+</div></header>
+<main class="page-shell">
+<p class="lab-warning">这里是待处理线索，不是已审核游戏库。模型与提示词来源分开存储；网页入口与游戏可玩性分开认证；无授权不发布第三方代码。</p>
+<section class="lab-stats" aria-label="待审统计">
+<div class="lab-stat"><strong id="q-posts">—</strong><span>待审原帖</span></div>
+<div class="lab-stat"><strong id="q-works">—</strong><span>待审工程</span></div>
+<div class="lab-stat"><strong id="q-repos">—</strong><span>候选仓库</span></div>
+<div class="lab-stat"><strong id="q-new">—</strong><span>尚未进入旧采集器的仓库</span></div>
+<div class="lab-stat"><strong id="q-aliases">—</strong><span>别名候选</span></div>
+</section>
+<section class="lab-head"><div><div class="section-kicker">MANUAL ADJUDICATION</div><h2>审核对象</h2><p>按证据逐条裁决，避免把帖子或 GitHub URL 当作已经证实的原创游戏。</p></div></section>
+<nav id="queue-tabs" class="lab-tabs" aria-label="审核队列类型">
+<button type="button" data-queue="repositories" aria-current="page">仓库候选</button>
+<button type="button" data-queue="posts">原帖实体</button>
+<button type="button" data-queue="works">作品工程</button>
+<button type="button" data-queue="alias_candidates">别名候选</button>
+</nav>
+<div class="lab-filters"><label class="lab-search"><span aria-hidden="true">⌕</span><input id="queue-search" type="search" placeholder="搜索仓库、作品、原帖、待审原因" autocomplete="off"></label>
+<select id="queue-filter" aria-label="审核路由"><option value="">全部路由</option></select></div>
+<div class="lab-status" id="queue-status" aria-live="polite"></div>
+<section class="lab-results" id="queue-results" aria-live="polite"><p class="lab-loading">正在读取审核队列…</p></section>
+<div class="lab-more"><button type="button" id="queue-more" hidden>加载更多</button></div>
+<footer class="site-footer"><div><strong>Awsome Games · Review Queue</strong><span>证据优先；不伪造确认状态</span></div>
+<p>审核更正通过 config/research_reviews.json 与 scripts/review_evidence.py 进入独立历史记录。工作台只读，不直接修改 GitHub 数据。</p></footer>
+</main>
+<script src="./assets/review.js" defer></script>
+</body>
+</html>

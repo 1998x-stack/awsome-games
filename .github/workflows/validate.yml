@@ -22,5 +22,6 @@ jobs:
       - run: python scripts/check_catalog.py
       - run: node --check site/assets/app.js
       - run: node --check site/assets/research.js
+      - run: node --check site/assets/review.js
       - run: bash -n scripts/*.sh bootstrap.sh
       - run: python scripts/build_site.py

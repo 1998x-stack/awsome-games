@@ -26,7 +26,7 @@ def classify_candidate(repo: dict) -> tuple[str, str]:
         return "MIRROR_NEEDS_ATTRIBUTION", "Find original author and check redistribution permission."
     if browser == "no" or any(t in tech for t in ("unity", "godot", "windows native", "snes rom", "python/non-browser", "rust native")):
         return "NON_BROWSER_REVIEW", "Determine delivery format; never run native code in the collector."
-    if "multi_model" in relation or "mixed" in relation.lower():
+    if "MULTI_MODEL" in relation or "MIXED" in relation:
         return "MIXED_MODEL_REVIEW", "Separate contributions of different generators."
     return "BROWSER_CANDIDATE_UNREVIEWED", "Verify source entry, assets, license and generated model evidence."
 

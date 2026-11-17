@@ -40,7 +40,12 @@
           ['模型归属（原仓库）',item.repository_model_evidence],['仓库关系',item.repository_relation],
           ['开源授权标记',item.license_state],['README核验等级',item.evidence_level],
           ['人工审核结论状态',item.review_status],['人工审核证据URL',item.review_evidence_url],['人工审核日期',item.reviewed_at],
-          ['真实浏览器试玩',item.execution_verified?'已完成':'NOT_TESTED / 未执行游戏'],
+          ['浏览器加载报告',item.latest_browser_evidence?.report_status||'NOT_TESTED'],
+          ['浏览器报告 ID',item.latest_browser_evidence?.evidence_id],
+          ['测试 Git commit',item.latest_browser_evidence?.repo_commit_sha],
+          ['入口 SHA-256',item.latest_browser_evidence?.entry_sha256],
+          ['测试时间',item.latest_browser_evidence?.tested_at],
+          ['实际游戏交互验证',item.execution_verified?'GAMEPLAY_VERIFIED':'NOT_VERIFIED / 无交互认证'],
           ['证据/来源仓库',item.source_url]
         ]};
     }
