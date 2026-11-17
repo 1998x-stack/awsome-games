@@ -40,25 +40,29 @@ class RefreshResearchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base=Path(tmp)/"v1";base.mkdir()
             current=Path(tmp)/"current"
-            previous={"schema_version":1,"records":[{"source":s,"source_id":"1"} for s in
-                       ("FableList","VibeGamer","DramaSo","Sandbase")]}
+            previous={"schema_version":1,"records":[{"source":s,"source_id":str(i)} for s in
+                       ("FableList","VibeGamer","DramaSo","Sandbase") for i in (1,2)]}
             entities={"schema_version":1,"records":[]}
             write_json(base/"sources.json",previous)
             write_json(base/"entities.json",entities)
             calls=[]
             def fake_fetch(url):
                 calls.append(url)
-                if "works.json" in url:return []
-                if "games.json" in url:return []
-                if "collection.json" in url:return {"entries":[]}
-                return []
+                if "works.json" in url:return [{"id":1,"title":"Demo"}]
+                if "games.json" in url:return [{"slug":"game-one","name":"Demo"}]
+                if "collection.json" in url:return {"entries":[{"id":1,"title":"Demo"}]}
+                return [{"id":1,"title":"Demo"}]
             with self.assertRaisesRegex(ValueError,"Source shrank"):
                 prepare(base,current,fake_fetch,allow_shrink=False)
             src,posts,count=prepare(base,current,fake_fetch,allow_shrink=True)
-            self.assertEqual(len(src["records"]),0)
+            self.assertEqual(len(src["records"]),4)
             self.assertEqual(len(posts["records"]),0)
             self.assertEqual(count,0)
             self.assertFalse(current.exists(),"dry run must not create or overwrite snapshots")
+            from refresh_research import publish_pair
+            publish_pair(src,posts,current)
+            self.assertEqual(json.loads((current/"sources.json").read_text())["records"],src["records"])
+            self.assertTrue((current/"entities.json").exists())
 
     def test_refresh_tool_does_not_contain_auto_execute(self):
         script=(ROOT/'scripts/refresh_research.py').read_text()
