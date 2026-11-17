@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Update evidence metadata only, never clone or run third-party code.
 
-Dry-run by default; explicit --write creates data/research/current/{sources,entities}.json.
+Dry-run by default; --write stages a versioned pair and atomically updates current/active.json.
 Original v1 snapshots are immutable. Importer uses current files when available.
 """
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -106,9 +107,50 @@ def merge_entities(old_records,new_source_rows):
             d["repository_url_count"]=len(repos)
     return records,added
 
+def _json_bytes(obj):
+    return (json.dumps(obj,ensure_ascii=False,sort_keys=True,separators=(",",":"))+"\n").encode("utf-8")
+
+
+def _digest_pair(sources,entities):
+    return hashlib.sha256(_json_bytes(sources)+b"\n"+_json_bytes(entities)).hexdigest()
+
+
+def load_current_pair(base=BASE,current=CURRENT):
+    """Read a consistent, versioned source/entity pair via one atomic manifest."""
+    pointer=current/"active.json"
+    if pointer.exists():
+        manifest=json.loads(pointer.read_text(encoding="utf-8"))
+        relative=manifest.get("snapshot_dir")
+        digest=manifest.get("sha256")
+        if not isinstance(relative,str) or not re.fullmatch(r"snapshots/[0-9a-f]{64}",relative):
+            raise ValueError("Invalid current research snapshot manifest path")
+        if digest!=relative.rsplit("/",1)[-1]:
+            raise ValueError("Snapshot manifest hash and directory disagree")
+        folder=current/relative
+        if folder.is_symlink() or not folder.is_dir():
+            raise ValueError("Referenced research snapshot directory is missing or unsafe")
+        sources=json.loads((folder/"sources.json").read_text(encoding="utf-8"))
+        entities=json.loads((folder/"entities.json").read_text(encoding="utf-8"))
+        if _digest_pair(sources,entities)!=digest:
+            raise ValueError("Research source/entity snapshot checksum mismatch")
+    else:
+        existing=(current/"sources.json").exists(),(current/"entities.json").exists()
+        if any(existing) and not all(existing):
+            raise ValueError("Partial legacy research current snapshot: fail closed")
+        folder=current if all(existing) else base
+        sources=json.loads((folder/"sources.json").read_text(encoding="utf-8"))
+        entities=json.loads((folder/"entities.json").read_text(encoding="utf-8"))
+    if sources.get("schema_version")!=1 or entities.get("schema_version")!=1:
+        raise ValueError("Unsupported research snapshot schema")
+    if not isinstance(sources.get("records"),list) or not isinstance(entities.get("records"),list):
+        raise ValueError("Invalid research record arrays")
+    if sources.get("captured_at") and entities.get("captured_at") and sources["captured_at"]!=entities["captured_at"]:
+        raise ValueError("Source/entity snapshot dates disagree")
+    return sources,entities
+
+
 def prepare(base=BASE,current=CURRENT,fetch=fetch_json,allow_shrink=False):
-    previous=json.loads(((current/"sources.json") if (current/"sources.json").is_file() else base/"sources.json").read_text())
-    old=json.loads(((current/"entities.json") if (current/"entities.json").is_file() else base/"entities.json").read_text())
+    previous,old=load_current_pair(base,current)
     prior=Counter(x["source"] for x in previous["records"])
     recs=[];info=[]
     for source,url in SOURCES:
@@ -145,29 +187,34 @@ def write_json(target,content):
         if os.path.exists(temp):os.unlink(temp)
 
 def publish_pair(sources,entities,target=CURRENT):
-    """Stage and validate both files, then replace them with rollback on failure."""
-    target.mkdir(parents=True,exist_ok=True)
-    names=("sources.json","entities.json")
-    with tempfile.TemporaryDirectory(prefix=".research-txn-",dir=target) as tmp:
-        stage=Path(tmp)
-        for name,obj in zip(names,(sources,entities)):
-            write_json(stage/name,obj)
-            json.loads((stage/name).read_text(encoding="utf-8"))
-        for name in names:
-            original=target/name
-            if original.is_file():shutil.copy2(original,stage/("backup-"+name))
-        replaced=[]
-        try:
-            for name in names:
-                os.replace(stage/name,target/name)
-                replaced.append(name)
-        except BaseException:
-            for name in reversed(replaced):
-                original=target/name
-                backup=stage/("backup-"+name)
-                if backup.exists():os.replace(backup,original)
-                else:original.unlink(missing_ok=True)
-            raise
+    """Write an immutable pair then atomically switch its active pointer.
+
+    Readers see either the old complete version or the new complete version,
+    never a mixed source/entity pair, including during process interruption.
+    """
+    if sources.get("captured_at")!=entities.get("captured_at"):
+        raise ValueError("Cannot publish source/entity snapshots with different dates")
+    digest=_digest_pair(sources,entities)
+    snapshots=target/"snapshots"
+    snapshots.mkdir(parents=True,exist_ok=True)
+    name=snapshots/digest
+    if not name.exists():
+        with tempfile.TemporaryDirectory(prefix=".build-",dir=snapshots) as tmp:
+            folder=Path(tmp)
+            (folder/"sources.json").write_bytes(_json_bytes(sources))
+            (folder/"entities.json").write_bytes(_json_bytes(entities))
+            if _digest_pair(json.loads((folder/"sources.json").read_text()),
+                            json.loads((folder/"entities.json").read_text()))!=digest:
+                raise RuntimeError("Failed staged snapshot integrity")
+            os.replace(folder,name)
+    elif name.is_symlink() or not name.is_dir():
+        raise RuntimeError("Snapshot content-addressed path is unsafe")
+    # Active manifest is a single atomic replace, not two successive replacements.
+    manifest={"schema_version":1,"snapshot_dir":"snapshots/"+digest,
+              "sha256":digest,"captured_at":sources.get("captured_at")}
+    write_json(target/"active.json",manifest)
+    return name
+
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
