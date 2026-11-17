@@ -3,7 +3,7 @@ from pathlib import Path
 from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts'))
-from db import connect, seed_database, classify, model_version, parse_repo, infer_relation, infer_entry_path
+from db import connect, seed_database, classify, model_version, parse_repo, infer_relation, infer_entry_path, SEED_PATH
 from collect_repositories import choose_entry, safe_rel_path, should_skip
 
 class CatalogTests(unittest.TestCase):
