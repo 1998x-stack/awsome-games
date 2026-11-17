@@ -1,4 +1,21 @@
 {
   "_comment": "Opt-in. Only include a repo after verifying the upstream license and rights to all bundled assets. Public access to GitHub source does NOT grant re-distribution rights. Do not put unverified repos here.",
-  "approved_repositories": []
+  "_reviewed": {
+    "Time-dev-alt/Fable-5.1-Games": {
+      "spdx": "MIT",
+      "license_file": "LICENSE (MIT License, Copyright (c) 2026 TimeDev)",
+      "repo_commit_sha": "ddfba6c470987637d95245c35231b7ef029d09b1",
+      "reviewed_at": "2026-11-17",
+      "evidence": "data/reports/runtime-evidence-2026-11-17.json",
+      "included_artifacts": ["Soccer.html"],
+      "excluded_artifacts": {
+        "shooter.html": "isolated runtime probe measured a sandbox incompatibility (localStorage SecurityError, shooter.html:12964); recorded as playable_status=sandbox_incompatible and not published for play"
+      },
+      "assets_note": "No embedded font files (web fonts are runtime references to fonts.googleapis.com and are NOT redistributed). shooter.html embeds 22 webp + 3 glTF-binary models supplied by the upstream author; their upstream provenance is not independently verifiable and remains an upstream attribution risk.",
+      "residual_risk": "We redistribute the repository contents under the licence the author granted on the whole repository. Whether the author held rights to every embedded 3D model is an upstream question we cannot resolve."
+    }
+  },
+  "approved_repositories": [
+    "Time-dev-alt/Fable-5.1-Games"
+  ]
 }

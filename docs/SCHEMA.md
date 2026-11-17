@@ -68,3 +68,24 @@ erDiagram
 | research_browser_runs | 将来真正浏览器实测的日志；空白不是已通过 |
 
 一个 Work 可以关联多个来源帖；一个 GitHub 仓库也可能对应多款不同作品；同名和同仓库绝不能自动推断唯一作品。人工审核必须有直接证据 URL，不能修改来源冻结 JSON 再冒称作者事实。active manifest 的 SHA-256 对 sources/entities 两文件一起做内容校验，详见 RESEARCH_INTEGRATION.md。
+
+## 运行实测状态（2026-11-17 新增）
+
+`project_repositories.playable_status` 除既有取值外，新增两个由**隔离容器实测**得出的结论值：
+
+| 取值 | 含义 | 是否可发布 |
+|---|---|---|
+| `entrypoint_found` | 找到 HTML 入口且相对静态资源齐全；**仅表示入口存在** | 是（仍需仓库在白名单内） |
+| `sandbox_incompatible` | 隔离实测发现该产物在**必需的** iframe 沙箱（无 `allow-same-origin`）下会抛错（例如访问 `localStorage`），因此不可玩 | **否**，`build_site.py` 会跳过 |
+| `runtime_verification_failed` | 隔离实测明确失败 | **否** |
+| `not_checked` / `needs_review` / `missing_assets` / `requires_build` | 未核实或已知缺条件 | 否 |
+
+`collect_repositories.py` 的 `RUNTIME_REVIEWED_STATUSES` 保证**重新采集不会静默把这些实测结论改回可发布**，与"来源刷新不得覆盖人工审核层"是同一条原则。把某个产物改回可发布，必须显式修改数据库并附证据。
+
+`entry_confidence` 新增 `runtime_reviewed`，表示该行入口结论来自运行实测而非文件树推断。
+
+### 运行证据
+
+* 报告由 `scripts/build_runtime_evidence.py` 聚合，落在 `data/reports/runtime-evidence-<date>.json`。
+* `INPUT_RESPONSIVE` = 注入合成指针/键盘输入后**渲染输出发生可观测变化**。它不证明游戏正确、完整或归属。
+* 聚合器是 fail-closed 的：若报告自称通过但带有控制台错误、被阻断的功能性依赖或没有输入驱动的变化，该条会被标记 `verification_rejected`，且**不计入** `gameplay_verified`。

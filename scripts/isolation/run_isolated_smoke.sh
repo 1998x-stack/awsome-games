@@ -28,6 +28,9 @@ ENVIRONMENT="${SMOKE_ENVIRONMENT:-}"
 SCREENSHOT_NAME=""
 MEMORY="${SMOKE_MEMORY:-1g}"
 CPUS="${SMOKE_CPUS:-1}"
+MODE="smoke"
+IDLE_MS=""
+SETTLE_MS=""
 
 die() { printf '%s\n' "error: $*" >&2; exit 2; }
 
@@ -38,6 +41,9 @@ while [ $# -gt 0 ]; do
     --out) OUT="${2:-}"; shift 2 ;;
     --image) IMAGE="${2:-}"; shift 2 ;;
     --screenshot) SCREENSHOT_NAME="${2:-}"; shift 2 ;;
+    --mode) MODE="${2:-}"; shift 2 ;;
+    --idle-ms) IDLE_MS="${2:-}"; shift 2 ;;
+    --settle-ms) SETTLE_MS="${2:-}"; shift 2 ;;
     --browser-version) BROWSER_VERSION="${2:-}"; shift 2 ;;
     --environment) ENVIRONMENT="${2:-}"; shift 2 ;;
     -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
@@ -48,6 +54,10 @@ done
 [ -n "$ROOT" ] || die "--root is required"
 [ -n "$ENTRY" ] || die "--entry is required"
 [ -n "$OUT" ] || die "--out is required"
+case "$MODE" in
+  smoke|gameplay) ;;
+  *) die "--mode must be smoke or gameplay" ;;
+esac
 [ -d "$ROOT" ] || die "staged root does not exist: $ROOT"
 command -v docker >/dev/null 2>&1 || die "docker is not installed"
 docker image inspect "$IMAGE" >/dev/null 2>&1 || die "image not found: $IMAGE (build it first)"
@@ -88,12 +98,20 @@ CONTAINER_ARGS=(
   -v "$VOLUME:/reports"
 )
 
-SMOKE_ARGS=(/work/browser_smoke.py --root /staged --entry "$ENTRY" --report /reports/smoke.json)
+if [ "$MODE" = "gameplay" ]; then
+  REPORT_NAME="gameplay.json"
+  SMOKE_ARGS=(/work/browser_gameplay_probe.py --root /staged --entry "$ENTRY" --report "/reports/$REPORT_NAME")
+  [ -n "$IDLE_MS" ] && SMOKE_ARGS+=(--idle-ms "$IDLE_MS")
+  [ -n "$SETTLE_MS" ] && SMOKE_ARGS+=(--settle-ms "$SETTLE_MS")
+else
+  REPORT_NAME="smoke.json"
+  SMOKE_ARGS=(/work/browser_smoke.py --root /staged --entry "$ENTRY" --report "/reports/$REPORT_NAME")
+fi
 if [ -n "$SCREENSHOT_NAME" ]; then
   SMOKE_ARGS+=(--screenshot "/reports/$SCREENSHOT_NAME")
 fi
 
-printf 'running isolated smoke test: image=%s entry=%s\n' "$IMAGE" "$ENTRY"
+printf 'running isolated %s test: image=%s entry=%s\n' "$MODE" "$IMAGE" "$ENTRY"
 set +e
 docker run "${CONTAINER_ARGS[@]}" "$IMAGE" "${SMOKE_ARGS[@]}"
 STATUS=$?

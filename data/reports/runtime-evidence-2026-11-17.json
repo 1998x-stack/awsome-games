@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "captured_at": "2026-11-17T09:52:13+00:00",
+  "isolation": {
+    "runtime": "docker 29.9.1 (daemon Ubuntu 24.04.4 LTS)",
+    "flags": [
+      "--network none",
+      "--read-only",
+      "--tmpfs /tmp",
+      "--user 65534:65534",
+      "--cap-drop ALL",
+      "--security-opt no-new-privileges",
+      "--pids-limit 256",
+      "--memory 1g",
+      "--cpus 1",
+      "-v <artifacts>:/staged:ro"
+    ],
+    "browser": "chromium headless shell 159.0.8154.6 (playwright 1.65.2)",
+    "network_policy": "all off-loopback HTTP aborted; WebSocket closed; web fonts stubbed locally (no egress)",
+    "artifacts_mounted_read_only": true
+  },
+  "evidence_scope": "Reports were produced inside a disposable --network none container with a read-only rootfs, a read-only staged mount, dropped capabilities and a non-root user. INPUT_RESPONSIVE means rendered output changed after synthetic pointer and keyboard input. It does not prove correctness, completeness, or authorship, and it is not a redistribution licence.",
+  "counts": {
+    "captures": 6,
+    "gameplay_verified": 1,
+    "load_checked": 4,
+    "failed_or_incomplete": 1,
+    "no_observable_response": 0
+  },
+  "consistency_problems": [],
+  "entries": [
+    {
+      "repo": "Time-dev-alt/Fable-5.1-Games",
+      "repo_commit_sha": "ddfba6c470987637d95245c35231b7ef029d09b1",
+      "entry_path": "Soccer.html",
+      "probe": "gameplay",
+      "status": "INPUT_RESPONSIVE",
+      "tested_at": "2026-11-17T09:27:16.540599+00:00",
+      "iframe_isolation": true,
+      "console_errors": [],
+      "blocked_functional_requests": [],
+      "stubbed_cosmetic_requests": [
+        "https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@400;600;700;800;900&display=swap"
+      ],
+      "failed_requests": [],
+      "http_errors": [],
+      "report_sha256": "a85904ea9a59a33be5ad90adb0625f714049c5a1460ff210453bb064ca799e0d",
+      "input_changed_pixels": true,
+      "input_changed_dom": true,
+      "idle_output_changed": true,
+      "fingerprints": {
+        "initial_pixels": "cdea5a2155698fbe895bc4da32dd8bc992da71c9812086310162d5b82295c352",
+        "idle_pixels": "a49680d40c3a57fa5df4535ddafc3d1f7b682452e0aa442579b7b2dde3f71e53",
+        "after_input_pixels": "1f9e5a3f9dbe27dba9e95193deb95394bedd16790f1b256965f07dde20c9ae99",
+        "initial_dom": "06eb3c70637a4ea3f63cd62008af670bc646e1dea44c072e11c1c085e8b70d00",
+        "idle_dom": "06eb3c70637a4ea3f63cd62008af670bc646e1dea44c072e11c1c085e8b70d00",
+        "after_input_dom": "9a6663c1bbcc14669b11b837838bd18e326b8100b8b25496bd7a2050e02dfbe8",
+        "pixel_error": ""
+      },
+      "gameplay_verified": true,
+      "screenshot_sha256": "a143fe1116c08c00c5498db9033c4b6fd95e549acfa84e0897e8df9a9ee744bf",
+      "entry_sha256": "d6c1f0704d1ff4f97068f2e875771ab6c5543e6e588f7ef2b27bcc50e7c0b8ef"
+    },
+    {
+      "repo": "Time-dev-alt/Fable-5.1-Games",
+      "repo_commit_sha": "ddfba6c470987637d95245c35231b7ef029d09b1",
+      "entry_path": "shooter.html",
+      "probe": "gameplay",
+      "status": "INCOMPLETE_OR_FAILED",
+      "tested_at": "2026-11-17T09:28:14.698673+00:00",
+      "iframe_isolation": true,
+      "console_errors": [
+        "SecurityError: Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.\n    at Object.init (http://127.0.0.1:42133/shooter.html:12964:5)"
+      ],
+      "blocked_functional_requests": [],
+      "stubbed_cosmetic_requests": [
+        "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@500;600;700;800&family=Anton&display=swap"
+      ],
+      "failed_requests": [],
+      "http_errors": [],
+      "report_sha256": "3f3c90b5a0ef7a316b0826a859a817df341774312e1d686e6b9f0773b150d36b",
+      "gameplay_verified": false,
+      "screenshot_sha256": "ac61bff1f1e27a689a9daf8cd049f4997395dea4be19f5a2600ca62317d77df1",
+      "entry_sha256": "c29562fb082afe8746b3924ca7b119e6587823f85ad27e97d8ef955ba5be6fd7"
+    },
+    {
+      "repo": "MiaAI-Lab/Claude-Fable-5.2-HTML-Files",
+      "repo_commit_sha": "369dae7fe4102988676f07f147c4bbaefee3ff3a",
+      "entry_path": "index.html",
+      "probe": "load",
+      "status": "BROWSER_LOAD_CHECKED",
+      "tested_at": "2026-11-17T09:25:15.163394+00:00",
+      "iframe_isolation": true,
+      "console_errors": [],
+      "blocked_functional_requests": [],
+      "stubbed_cosmetic_requests": [],
+      "failed_requests": [],
+      "http_errors": [],
+      "report_sha256": "4b9ed0e9f602ef15df08a4943e49d7f055ed6d9b6b963255933852890f558684",
+      "gameplay_verified": false,
+      "entry_sha256": "1de258cfcdab110b532f16db46ef6f9b1d31b6c92e9fba4e373cb72b3be629fe"
+    },
+    {
+      "repo": "MiaAI-Lab/Claude-Fable-5.2-HTML-Files",
+      "repo_commit_sha": "369dae7fe4102988676f07f147c4bbaefee3ff3a",
+      "entry_path": "028-conservas-mare-alta.html",
+      "probe": "load",
+      "status": "BROWSER_LOAD_CHECKED",
+      "tested_at": "2026-11-17T09:25:18.342757+00:00",
+      "iframe_isolation": true,
+      "console_errors": [],
+      "blocked_functional_requests": [],
+      "stubbed_cosmetic_requests": [],
+      "failed_requests": [],
+      "http_errors": [],
+      "report_sha256": "938fa7ab3e644649b4484c5a29a5d08368f3601da8b18948fc69b81d5914e00e",
+      "gameplay_verified": false,
+      "entry_sha256": "b2cfeef70771a37f017639ec66bdbc2cbec22c277a2cf43f4c1385eeb50a5194"
+    },
+    {
+      "repo": "MiaAI-Lab/Claude-Fable-5.2-HTML-Files",
+      "repo_commit_sha": "369dae7fe4102988676f07f147c4bbaefee3ff3a",
+      "entry_path": "040-the-harbour-courier-1926.html",
+      "probe": "load",
+      "status": "BROWSER_LOAD_CHECKED",
+      "tested_at": "2026-11-17T09:25:21.402591+00:00",
+      "iframe_isolation": true,
+      "console_errors": [],
+      "blocked_functional_requests": [],
+      "stubbed_cosmetic_requests": [],
+      "failed_requests": [],
+      "http_errors": [],
+      "report_sha256": "4fc2f27eb2309a2d088c78a7df119ab00abe22e6c05823f8cc1a7d015cf7f3d8",
+      "gameplay_verified": false,
+      "entry_sha256": "82a7d1e5b36b665baa62a45b88c784a31f11d46bc88acea04230a5ff7b6da4e6"
+    },
+    {
+      "repo": "MiaAI-Lab/Claude-Fable-5.2-HTML-Files",
+      "repo_commit_sha": "369dae7fe4102988676f07f147c4bbaefee3ff3a",
+      "entry_path": "067-a-short-history-of-fog.html",
+      "probe": "load",
+      "status": "BROWSER_LOAD_CHECKED",
+      "tested_at": "2026-11-17T09:25:24.426333+00:00",
+      "iframe_isolation": true,
+      "console_errors": [],
+      "blocked_functional_requests": [],
+      "stubbed_cosmetic_requests": [],
+      "failed_requests": [],
+      "http_errors": [],
+      "report_sha256": "bbaf4b8537c4d453108454e6d358b85561f63a270fc9bbce7d4faca23a16c0b2",
+      "gameplay_verified": false,
+      "entry_sha256": "0f07fc930f825979ceb0ad3bec4a8bd483cc2877d2ac2d70ee879e8c53bbc7f2"
+    }
+  ]
+}
