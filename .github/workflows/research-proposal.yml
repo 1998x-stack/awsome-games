@@ -1,0 +1,60 @@
+name: Propose metadata-only source drift
+on:
+  schedule:
+    - cron: '43 4 * * 2'
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  propose:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Generate unapproved metadata drift summary
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python scripts/propose_research_drift.py --output /tmp/research-source-proposal.json
+      - name: Open draft PR only when source records changed
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ ! -s /tmp/research-source-proposal.json ]]; then
+            echo "No source-record drift; no proposal created."
+            exit 0
+          fi
+          SHA=$(python -c 'import json; print(json.load(open("/tmp/research-source-proposal.json"))["candidate_source_sha256"][:16])')
+          BRANCH="automation/research-drift-${SHA}"
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "A proposal for this candidate source snapshot already exists or existed: $BRANCH"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          mkdir -p data/research/proposals
+          cp /tmp/research-source-proposal.json data/research/proposals/latest.json
+          git add -- data/research/proposals/latest.json
+          if git diff --cached --quiet; then
+            echo "Unchanged proposal; no PR needed."
+            exit 0
+          fi
+          git commit -m "chore(research): propose unverified source metadata drift"
+          git -c http.extraheader="AUTHORIZATION: bearer ${GH_TOKEN}" push origin "HEAD:refs/heads/$BRANCH"
+          gh pr create --draft --base main --head "$BRANCH" \
+            --title "chore(research): review source metadata drift ${SHA}" \
+            --body "Automated DRAFT proposal of metadata differences only. Review source identities, safety and evidence manually. No source/entity snapshot promotion, third-party code execution, publication or APPROVED adjudication. To apply accepted changes, use a distinct reviewed PR."
+# GitHub repository settings may prohibit Actions from opening PRs; fail without
+# bypassing policy. No secrets or external code artefacts are committed.
