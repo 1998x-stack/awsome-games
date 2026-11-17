@@ -164,8 +164,16 @@ class SiteCrossNavigationE2ETests(unittest.TestCase):
             self.assertEqual(anchors.count(), 2, footer.inner_html())
             href = anchors.nth(1).get_attribute("href")
             self.assertRegex(href, r"^\./research\.html\?kind=repositories&id=")
-            # Follow the link the way a user would and confirm the deep link opens.
-            page.goto(self.page_url(href.lstrip("./")), wait_until="networkidle")
+            # The external evidence link may open a new tab; the internal Evidence
+            # Lab hop must NOT, otherwise the audit trail leaves the current tab.
+            self.assertEqual(anchors.nth(0).get_attribute("target"), "_blank")
+            self.assertIsNone(anchors.nth(1).get_attribute("target"))
+            # Click it for real and confirm we navigate in place, then that the
+            # deep link opens the matching detail dialog.
+            anchors.nth(1).click()
+            page.wait_for_load_state("networkidle")
+            self.assertIn("research.html", page.url)
+            self.assertIn("kind=repositories", page.url)
             self.assertTrue(page.locator("#lab-detail").evaluate("d => d.open"))
             self.assertEqual(errors, [])
         finally:
