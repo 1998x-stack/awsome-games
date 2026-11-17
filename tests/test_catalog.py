@@ -48,6 +48,8 @@ class CatalogTests(unittest.TestCase):
     def test_repository_parser_and_roles(self):
         self.assertEqual(parse_repo('owner/game')['clone_url'],'https://github.com/owner/game.git')
         self.assertIsNone(parse_repo('not-a-repository'))
+        for value in ('../evil', 'user/..', 'user/repo?x=1', 'user/repo\\nheader', 'user/name with spaces'):
+            self.assertIsNone(parse_repo(value),value)
         self.assertEqual(infer_relation('sorrycc/fable-arcade'),'collection')
         self.assertEqual(infer_relation('realcodebear/saltline-fable-5.2'),'third_party_mirror')
     def test_entry_path_inference(self):
@@ -62,6 +64,8 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(confidence,'title_path_match')
         p={'id':'2','slug':'a','title':'A','entry_path':''}
         self.assertEqual(choose_entry(p,['index.html','about.html'],2)[0],'')
+        unsafe={'id':'3','slug':'demo','title':'Demo','entry_path':'../../index.html'}
+        self.assertEqual(choose_entry(unsafe,['index.html'],1),('', 'unsafe_explicit_entry'))
     def test_path_and_secret_filters(self):
         self.assertIsNone(safe_rel_path('../evil.html'))
         self.assertEqual(safe_rel_path('games/index.html'),'games/index.html')
