@@ -391,3 +391,24 @@ class RuntimeReviewedStatusTests(unittest.TestCase):
             agg=conn.execute("SELECT playable_status FROM projects WHERE id='p'").fetchone()[0]
             self.assertEqual(agg,'sandbox_incompatible')
             conn.close()
+
+
+class VendoredEntryConsistencyTests(unittest.TestCase):
+    """A committed catalog must not claim entrypoints the checkout cannot serve."""
+
+    def test_check_catalog_only_requires_files_it_can_see(self):
+        source=(ROOT/'scripts/check_catalog.py').read_text(encoding='utf-8')
+        self.assertIn("playable_status='entrypoint_found'",source)
+        self.assertNotIn('entrypoint_detected_not_vendored',source)
+
+    def test_marker_uses_git_to_decide_instead_of_a_hardcoded_list(self):
+        source=(ROOT/'scripts/mark_unvendored_entries.py').read_text(encoding='utf-8')
+        self.assertIn('git',source)
+        self.assertIn('check-ignore',source)
+        self.assertIn('entrypoint_detected_not_vendored',source)
+        self.assertIn('--apply',source)
+
+    def test_gitignore_tracks_only_approved_artifacts(self):
+        ignores=(ROOT/'.gitignore').read_text(encoding='utf-8')
+        self.assertIn('games/_repos/*',ignores)
+        self.assertIn('!games/_repos/Time-dev-alt__Fable-5.1-Games/Soccer.html',ignores)

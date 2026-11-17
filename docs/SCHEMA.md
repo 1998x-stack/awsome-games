@@ -106,3 +106,21 @@ erDiagram
 
 `playable_status` 语义分工：`entrypoint_found`＝入口存在；上述 `runtime_*`＝已实测且**不可发布**；
 只有白名单仓库中 `entrypoint_found`/`smoke_test_passed` 的作品才会出现在站点试玩按钮上。
+
+### 已检测 vs 已入库（`entrypoint_detected_not_vendored`）
+
+第三方快照默认不入库（见 `.gitignore`），所以本地全量采集后，大多数入口行指向**不在仓库里**的文件。
+`check_catalog.py` 对于 `entrypoint_found` 要求文件确实存在——这是正确的：否则一个干净克隆会声称
+自己无法提供服务的入口。
+
+因此提交前必须运行：
+
+```bash
+python3 scripts/mark_unvendored_entries.py            # 只报告
+python3 scripts/mark_unvendored_entries.py --apply    # 把被 .gitignore 排除的入口改标为已检测未入库
+python3 scripts/check_catalog.py                      # 必须 problems: []
+```
+
+该脚本用 `git check-ignore --stdin` 判断，所以结论不可能与 `.gitignore` 漂移。
+`entrypoint_detected_not_vendored` **不参与发布**；重新运行 `collect_repositories.py` 会把文件取回本地，
+再次变为 `entrypoint_found`。
