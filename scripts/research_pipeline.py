@@ -301,12 +301,37 @@ def export_projection(conn: sqlite3.Connection) -> dict:
         r.relation AS repository_relation,r.license_state,r.review_level,r.readme_url,
         r.browser_status FROM research_works w LEFT JOIN research_repositories r
         ON r.full_name=w.repository_full_name ORDER BY w.work_id""")
+    reviews = {row["work_id"]: dict(row) for row in conn.execute(
+        "SELECT * FROM research_work_reviews WHERE review_status='APPROVED' AND evidence_url<>''")}
+    for w in works:
+        reviewed = reviews.get(w["work_id"])
+        if reviewed:
+            for col in ("entry_path","entry_status","prompt_status","human_contribution",
+                        "human_status","model_evidence","external_dependencies"):
+                if reviewed[col] is not None:
+                    w[col] = reviewed[col]
+            w["review_status"] = "APPROVED"
+            w["review_evidence_url"] = reviewed["evidence_url"]
+            w["reviewed_at"] = reviewed["reviewed_at"]
+        else:
+            w["review_status"] = "UNREVIEWED"
     for w in works:
         w["evidence_level"]="READ_ME_REVIEWED" if w["review_level"]=="README_REVIEWED" else "COMMUNITY_INDEX_ONLY"
         w["execution_verified"]=False  # Never promote static entry detection into actual gameplay verification.
     posts=objs("""SELECT post_key,entity_id,post_url,title,creator,category,sources,
         kind_signal,work_id,match_status,entity_status,confidence,model_claim,play_urls,repo_urls
         FROM research_posts ORDER BY post_key""")
+    post_reviews = {row["post_key"]: dict(row) for row in conn.execute(
+        "SELECT * FROM research_post_reviews WHERE review_status='APPROVED' AND evidence_url<>''")}
+    for p in posts:
+        reviewed = post_reviews.get(p["post_key"])
+        if reviewed:
+            for col in ("entity_id","work_id","confidence"):
+                if reviewed[col] is not None: p[col] = reviewed[col]
+            p["review_status"] = "APPROVED"
+            p["review_evidence_url"] = reviewed["evidence_url"]
+            p["reviewed_at"] = reviewed["reviewed_at"]
+        else: p["review_status"] = "UNREVIEWED"
     for p in posts:
         p["play_urls"]=json.loads(p["play_urls"]);p["repo_urls"]=json.loads(p["repo_urls"])
     repos=objs("""SELECT full_name,display_title,source_channel,relation,tech,browser_hint,
@@ -314,7 +339,7 @@ def export_projection(conn: sqlite3.Connection) -> dict:
         FROM research_repositories ORDER BY lower(full_name)""")
     claims=objs("""SELECT * FROM research_claims ORDER BY claim_id""")
     stats=counts(conn)
-    return {"schema_version":1,"captured_at":"2026-11-17",
+    return {"schema_version":1,"captured_at":read("sources.json").get("captured_at","2026-11-17"),
             "warning":"Source records, original posts and works are different units. No third-party gameplay has been executed or verified.",
             "stats":stats,"works":works,"posts":posts,"repositories":repos,
             "claims":claims}
