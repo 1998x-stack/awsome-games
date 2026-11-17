@@ -198,21 +198,43 @@ def build_site(include_unapproved=False, max_site_bytes=850*1024*1024):
 
         dest = site / "games"
         backup = Path(temporary) / "previous-games"
-        if dest.exists():
-            dest.rename(backup)
+        old_metadata = Path(temporary) / "previous-metadata"
+        old_metadata.mkdir(parents=True)
+        for rel in artifacts:
+            current = site / rel
+            if current.is_file():
+                retained = old_metadata / rel
+                retained.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(current, retained)
+        original_nojekyll = (site / ".nojekyll").exists()
+        replaced=[]
+        games_swapped=False
         try:
-            # This may be cross-directory but stays inside the same worktree volume.
+            if dest.exists():
+                dest.rename(backup)
             stage.rename(dest)
+            games_swapped=True
+            for rel in artifacts:
+                target = site / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(Path(temporary) / rel, target)
+                replaced.append(rel)
+            (site / ".nojekyll").write_text("", encoding="utf-8")
         except BaseException:
+            for rel in reversed(replaced):
+                target = site / rel
+                prior = old_metadata / rel
+                if prior.is_file():
+                    os.replace(prior, target)
+                else:
+                    target.unlink(missing_ok=True)
+            if games_swapped and dest.exists():
+                shutil.rmtree(dest)
             if backup.exists():
                 backup.rename(dest)
+            if not original_nojekyll:
+                (site / ".nojekyll").unlink(missing_ok=True)
             raise
-
-        for rel in artifacts:
-            target = site / rel
-            target.parent.mkdir(parents=True, exist_ok=True)
-            os.replace(Path(temporary) / rel, target)
-        (site / ".nojekyll").write_text("", encoding="utf-8")
 
     return {"projects": data["summary"]["projects"],
             "repos": data["summary"]["repositories"],
