@@ -56,31 +56,55 @@ def fetch_json(url,max_bytes=8*1024*1024):
     return json.loads(raw)
 
 def merge_entities(old_records,new_source_rows):
+    """Union exact X post IDs; enrich provenance without overwriting reviewed claims."""
     records=[dict(x) for x in old_records]
-    known={str(x["post_id"]):x for x in records}
-    count=0
+    known={str(x["post_id"]):x for x in records if x.get("post_id")}
+    added=0
     for x in new_source_rows:
         ident=x.get("post_id")
-        if not ident or ident in known:continue
-        d={"post_id":ident,"post_url":x.get("post_url"),"title":x.get("title") or "",
-           "aliases":x.get("title_zh") or None,"creator":x.get("author") or None,
-           "category":x.get("category") or None,"sources":x.get("source"),
-           "source_count":1,"source_ids":str(x.get("source"))+":"+str(x.get("source_id")),
-           "play_url_count":0,"play_urls":[],"repository_url_count":0,"repository_urls":[],
-           "work_id":None,"candidate_work_ids":None,"match_status":"UNRESOLVED",
-           "confidence":"none","match_method":"incremental source post - no independent work verification",
-           "kind_signal":"not reviewed","model_claim":"not checked","prompt_evidence":"not checked",
-           "date":None,"likes_snapshot":None,"views_snapshot":None,"note":"Incrementally discovered; not verified as game",
-           "entity_id":"ENT-POST-"+ident,"entity_resolution_status":"POST_ONLY_UNRESOLVED",
-           "candidate_group_id":None,"resolution_key":"post:"+ident}
+        if not ident:continue
+        if ident not in known:
+            d={"post_id":ident,"post_url":x.get("post_url"),"title":x.get("title") or "",
+               "aliases":x.get("title_zh") or None,"creator":x.get("author") or None,
+               "category":x.get("category") or None,"sources":"",
+               "source_count":0,"source_ids":"",
+               "play_url_count":0,"play_urls":[],"repository_url_count":0,"repository_urls":[],
+               "work_id":None,"candidate_work_ids":None,"match_status":"UNRESOLVED",
+               "confidence":"none","match_method":"incremental source post - no independent work verification",
+               "kind_signal":"not reviewed","model_claim":"not checked","prompt_evidence":"not checked",
+               "date":None,"likes_snapshot":None,"views_snapshot":None,
+               "note":"Incrementally discovered, not verified as a game",
+               "entity_id":"ENT-POST-"+ident,"entity_resolution_status":"POST_ONLY_UNRESOLVED",
+               "candidate_group_id":None,"resolution_key":"post:"+ident}
+            records.append(d);known[ident]=d;added+=1
+        d=known[ident]
+        # Merge only observation-level facts. Never rewrite work_id, model claim,
+        # entity key, manually classified type or adjudicated confidence.
+        prior_sources=set(q for q in re.split(r"\s*\+\s*|\n+",d.get("sources") or "") if q)
+        new_source=x.get("source") or ""
+        if new_source:prior_sources.add(new_source)
+        d["sources"]=" + ".join(sorted(prior_sources))
+        source_ids=set(q.strip() for q in re.split(r"\s*/\s*|\n+",d.get("source_ids") or "") if q.strip())
+        ref=str(x.get("source") or "")+":"+str(x.get("source_id") or "")
+        if ref!=":":source_ids.add(ref)
+        d["source_ids"]=" / ".join(sorted(source_ids))
+        d["source_count"]=max(int(d.get("source_count") or 0),len(source_ids))
         play=x.get("play_url")
-        if play and isinstance(play,str) and play.startswith("https://") and "github.com/" not in play:
-            d.update(play_url_count=1,play_urls=[play],entity_resolution_status="PROVISIONAL_PLAYABLE_POST",resolution_key="play:"+play)
+        if isinstance(play,str) and play.startswith("https://") and "github.com/" not in play:
+            urls=list(d.get("play_urls") or [])
+            if play not in urls:urls.append(play)
+            d["play_urls"]=urls
+            d["play_url_count"]=len(urls)
+            if d["entity_resolution_status"]=="POST_ONLY_UNRESOLVED":
+                d["entity_resolution_status"]="PROVISIONAL_PLAYABLE_POST"
+                d["resolution_key"]="play:"+play
         repo=x.get("repo_url")
-        if repo and isinstance(repo,str) and repo.startswith("https://github.com/"):
-            d.update(repository_url_count=1,repository_urls=[repo])
-        records.append(d);known[ident]=d;count+=1
-    return records,count
+        if isinstance(repo,str) and repo.startswith("https://github.com/"):
+            repos=list(d.get("repository_urls") or [])
+            if repo not in repos:repos.append(repo)
+            d["repository_urls"]=repos
+            d["repository_url_count"]=len(repos)
+    return records,added
 
 def prepare(base=BASE,current=CURRENT,fetch=fetch_json,allow_shrink=False):
     previous=json.loads(((current/"sources.json") if (current/"sources.json").is_file() else base/"sources.json").read_text())
