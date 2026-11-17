@@ -88,7 +88,7 @@
   }
   function exportCsv() {
     const rows=state.visible, cols=['id','slug','title','model_version','content_type','categories','creator','source_status','playable_status','repositories','demos'];
-    const quote=x=>{let v=String(x??''); if (/^[=+\\-@\\t\\r]/.test(v)) v="'"+v; return '"'+v.replaceAll('"','""')+'"';};
+    const quote=x=>{let v=String(x??''); if (/^[=+@\t\r-]/.test(v)) v="'"+v; return '"'+v.replaceAll('"','""')+'"';};
     const lines=[cols,...rows.map(p=>[p.id,p.slug,p.title,p.model_version,p.content_type,(p.categories||[]).map(c=>c.name).join('; '),p.creator,p.source_status,p.playable_status,(p.repositories||[]).map(r=>r.full_name).join('; '),(p.demos||[]).join('; ')])];
     const blob=new Blob(['\ufeff'+lines.map(r=>r.map(quote).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='awsome-games-filtered.csv';a.click();URL.revokeObjectURL(a.href);
