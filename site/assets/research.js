@@ -39,6 +39,7 @@
           ['人工参与验证状态',item.human_status],
           ['模型归属（原仓库）',item.repository_model_evidence],['仓库关系',item.repository_relation],
           ['开源授权标记',item.license_state],['README核验等级',item.evidence_level],
+          ['人工审核结论状态',item.review_status],['人工审核证据URL',item.review_evidence_url],['人工审核日期',item.reviewed_at],
           ['真实浏览器试玩',item.execution_verified?'已完成':'NOT_TESTED / 未执行游戏'],
           ['证据/来源仓库',item.source_url]
         ]};
@@ -52,6 +53,7 @@
           ['来源重叠',item.sources],['匹配规则',item.match_status],
           ['证据置信度',item.confidence],['模型说法（未经校验）',item.model_claim],
           ['所有试玩链接',item.play_urls],['源码仓库候选链接',item.repo_urls],
+          ['审核结论状态',item.review_status],['审核依据',item.review_evidence_url],
           ['归并状态',item.entity_status]
         ]};
     }
