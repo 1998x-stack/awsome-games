@@ -28,6 +28,13 @@
     python3 -m unittest discover -s tests -v
 
 
+## 待审数据与可复核工作流（M1–M5）
+
+- [审核工作台](site/review.html)：从当前 SQLite 导出未验证帖子、作品、候选仓库和显式别名候选。队列不等于审核结论。
+- [研究证据中心](site/research.html)：模型身份与提示词公开状态分离，展示已导入的浏览器加载报告，但**不自动认证游戏可玩**。
+- [执行与下一阶段说明](docs/MILESTONES_M1_M5.md)：列出已实现的组件、测试条件和实际尚未执行的任务。
+- [每日上游元数据漂移检查](.github/workflows/research-sync.yml)：只读定时检查，不自动克隆/发布、不写回主分支。
+
 ## 当前首批数据
 
 | 指标 | 数量 | 说明 |

@@ -29,6 +29,7 @@ jobs:
           python scripts/build_site.py
           node --check site/assets/app.js
           node --check site/assets/research.js
+          node --check site/assets/review.js
       - name: Verify evidence and publishing regressions before deployment
         run: |
           python -m compileall -q scripts tests

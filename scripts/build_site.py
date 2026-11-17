@@ -20,6 +20,7 @@ from pathlib import Path
 from db import ROOT, connect
 from build_catalog import export_catalog
 from research_pipeline import ingest as ingest_research, export_projection
+from review_queue import build_queue
 
 APPROVALS = ROOT / "config" / "publication_approvals.json"
 REPO_PATTERN = re.compile(r"^[A-Za-z0-9-]+/[A-Za-z0-9_.-]+$")
@@ -105,9 +106,11 @@ def build_site(include_unapproved=False, max_site_bytes=850*1024*1024):
     conn = connect()
     try:
         research = None
+        review_queue = None
         if isinstance(conn, sqlite3.Connection):
             ingest_research(conn)
             research = export_projection(conn)
+            review_queue = build_queue(conn)
         data = export_catalog(conn)
     finally:
         conn.close()
@@ -178,6 +181,8 @@ def build_site(include_unapproved=False, max_site_bytes=850*1024*1024):
         }
         if research is not None:
             artifacts["data/research.json"] = json.dumps(research, ensure_ascii=False, separators=(",", ":"))
+        if review_queue is not None:
+            artifacts["data/review-queue.json"] = json.dumps(review_queue, ensure_ascii=False, separators=(",", ":"))
 
         # Include existing site template files, but exclude outputs we replace.
         replacing = set(artifacts) | {".nojekyll"}

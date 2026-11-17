@@ -40,7 +40,12 @@
           ['模型归属（原仓库）',item.repository_model_evidence],['仓库关系',item.repository_relation],
           ['开源授权标记',item.license_state],['README核验等级',item.evidence_level],
           ['人工审核结论状态',item.review_status],['人工审核证据URL',item.review_evidence_url],['人工审核日期',item.reviewed_at],
-          ['真实浏览器试玩',item.execution_verified?'已完成':'NOT_TESTED / 未执行游戏'],
+          ['浏览器加载报告',item.latest_browser_evidence?.report_status||'NOT_TESTED'],
+          ['浏览器报告 ID',item.latest_browser_evidence?.evidence_id],
+          ['测试 Git commit',item.latest_browser_evidence?.repo_commit_sha],
+          ['入口 SHA-256',item.latest_browser_evidence?.entry_sha256],
+          ['测试时间',item.latest_browser_evidence?.tested_at],
+          ['实际游戏交互验证',item.execution_verified?'GAMEPLAY_VERIFIED':'NOT_VERIFIED / 无交互认证'],
           ['证据/来源仓库',item.source_url]
         ]};
     }
@@ -52,6 +57,7 @@
           ['作品主表ID',item.work_id],['作者/账号',item.creator],['内容类型',item.category],
           ['来源重叠',item.sources],['匹配规则',item.match_status],
           ['证据置信度',item.confidence],['模型说法（未经校验）',item.model_claim],
+          ['提示词在来源中的公开状态',item.prompt_availability],
           ['所有试玩链接',item.play_urls],['源码仓库候选链接',item.repo_urls],
           ['审核结论状态',item.review_status],['审核依据',item.review_evidence_url],
           ['归并状态',item.entity_status]
@@ -168,9 +174,14 @@
       $('lab-export').addEventListener('click',exportCsv);
       $('lab-close').addEventListener('click',()=>$('lab-detail').close());
       $('lab-detail').addEventListener('click',e=>{if(e.target===$('lab-detail'))e.target.close()});
-      select('works');
-      const work=new URLSearchParams(location.search).get('work');
-      if(work){const item=data.works.find(x=>x.work_id===work);if(item)detail('works',item)}
+      const params=new URLSearchParams(location.search);
+      const requestedKind=params.get('kind');
+      select(sections.includes(requestedKind)?requestedKind:'works');
+      const itemId=params.get('id')||params.get('work');
+      if(itemId){
+        const item=(data[state.kind]||[]).find(x=>(x.work_id||x.post_key||x.full_name||x.claim_id)===itemId);
+        if(item)detail(state.kind,item);
+      }
     }catch(err){$('lab-results').replaceChildren(text('p','研究索引加载失败：'+err.message+'。请运行 scripts/build_catalog.py 和 scripts/build_site.py，并通过 HTTP 服务访问。','lab-loading'));}
   }
   init();
