@@ -113,15 +113,14 @@ class ResearchIntegrationTests(unittest.TestCase):
             conn=connect(Path(tmp)/"snapshot.sqlite")
             seed_database(conn,SEED_PATH)
             ingest(conn)
-            original=research_pipeline.read
-            def one_source(name):
-                value=original(name)
-                if name=="sources.json":
-                    value=dict(value)
-                    value["records"]=value["records"][:7]
-                    value["captured_at"]="2026-12-01"
-                return value
-            with patch.object(research_pipeline,"read",side_effect=one_source):
+            original=research_pipeline.load_current_pair
+            def one_pair():
+                source,entity=original()
+                source=dict(source)
+                source["records"]=source["records"][:7]
+                source["captured_at"]="2026-12-01"
+                return source,entity
+            with patch.object(research_pipeline,"load_current_pair",side_effect=one_pair):
                 stats=ingest(conn)
                 self.assertEqual(stats["source_records"],7)
                 self.assertEqual(export_projection(conn)["captured_at"],"2026-12-01")
