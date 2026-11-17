@@ -63,6 +63,24 @@ CREATE TABLE IF NOT EXISTS research_browser_runs (
  blocked_requests TEXT NOT NULL, screenshot_path TEXT,
  FOREIGN KEY(work_id) REFERENCES research_works(work_id)
 );
+-- Curated adjudications are independent of snapshots and survive every re-import.
+CREATE TABLE IF NOT EXISTS research_work_reviews (
+ work_id TEXT PRIMARY KEY REFERENCES research_works(work_id) ON DELETE CASCADE,
+ review_status TEXT NOT NULL CHECK(review_status IN ('APPROVED','DRAFT','REJECTED')),
+ evidence_url TEXT NOT NULL,
+ entry_path TEXT, entry_status TEXT, prompt_status TEXT,
+ human_contribution TEXT, human_status TEXT, model_evidence TEXT,
+ external_dependencies TEXT, reviewer_note TEXT NOT NULL DEFAULT '',
+ reviewed_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS research_post_reviews (
+ post_key TEXT PRIMARY KEY REFERENCES research_posts(post_key) ON DELETE CASCADE,
+ review_status TEXT NOT NULL CHECK(review_status IN ('APPROVED','DRAFT','REJECTED')),
+ evidence_url TEXT NOT NULL,
+ work_id TEXT REFERENCES research_works(work_id),
+ entity_id TEXT, confidence TEXT, reviewer_note TEXT NOT NULL DEFAULT '',
+ reviewed_at TEXT NOT NULL
+);
 CREATE INDEX IF NOT EXISTS idx_research_posts_entity ON research_posts(entity_id);
 CREATE INDEX IF NOT EXISTS idx_research_posts_work ON research_posts(work_id);
 CREATE INDEX IF NOT EXISTS idx_research_sources_post ON research_source_records(post_id);
@@ -106,6 +124,30 @@ def valid_url(url: str) -> str:
     except (ValueError, TypeError):
         pass
     return ""
+
+def classify_prompt_evidence(value: str) -> str:
+    """Negative statements like '未公开' must never become 'PUBLISHED'."""
+    description = (value or "").strip()
+    if re.match(r"^(?:是[:：]|已公开[:：]|原始提示词已公开)", description):
+        return "PUBLISHED_AUTHOR_MATERIAL"
+    if description.startswith(("部分", "有部分")):
+        return "PARTIAL_MATERIALS_NEED_REVIEW"
+    if "未发现" in description or "未公开" in description or "未提供" in description:
+        return "NOT_LOCATED"
+    return "NOT_VERIFIED"
+
+
+def reviewed_human_role(repository: str, title: str) -> tuple[str, str]:
+    """Explicit public self-reports only; never infer human working hours."""
+    repo = repository.casefold()
+    if repo == "sharpwizard/ironvale":
+        return ("Author reports 21 natural-language development requests; manual edits unverified.", "AUTHOR_SELF_REPORT")
+    if repo == "realcodebear/saltline-fable-5.2":
+        return ("Original creator reportedly claims one request and no human feedback; repository is a mirror.", "THIRD_PARTY_SUMMARY_UNVERIFIED")
+    if repo == "hahaliu1029/fable5.2demo" and "misremember" in title.casefold():
+        return ("Author notes later Codex-assisted image assets; human code editing unverified.", "AUTHOR_SELF_REPORT")
+    return ("UNKNOWN", "NOT_VERIFIED")
+
 
 def norm_title(s: str) -> str:
     return " ".join(str(s or "").casefold().split())
