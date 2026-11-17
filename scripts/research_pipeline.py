@@ -190,7 +190,11 @@ def ingest(conn: sqlite3.Connection) -> dict:
             entry = REVIEWED_ENTRIES.get((repo_raw, norm_title(title)), "")
             review = audit.get(repo_raw, {})
             prompt_text = str(review.get("提示词公开情况") or "")
-            prompt = "AUTHOR_DOCUMENTED" if ("是：" in prompt_text or "公开" in prompt_text) else "NOT_VERIFIED"
+            prompt = classify_prompt_evidence(prompt_text)
+            human_text, human_status = reviewed_human_role(repo_raw,title)
+            model_statement = str(review.get("模型归属声明") or "")
+            model_evidence = ("AUTHOR_SELF_REPORT" if any(q in model_statement for q in ("README称","README声明","README明确"))
+                              else "COMMUNITY_CLAIM")
             conn.execute("""INSERT INTO research_works
                 (work_id,title,repository_full_name,demo_url,rendering_stack,build_method,
                 artifact_kind,human_contribution,human_status,external_dependencies,
@@ -208,14 +212,14 @@ def ingest(conn: sqlite3.Connection) -> dict:
                 (r.get("work_id"),title,full_name,valid_url(r.get("试玩URL")),
                  r.get("渲染栈（原清单）"),r.get("构建方式（原清单）"),
                  r.get("交付形态（原清单）"),
-                 str(review.get("模型归属声明") or "UNKNOWN")[:1200],
-                 "AUTHOR_DESCRIPTION_ONLY" if review else "NOT_VERIFIED",
+                 human_text,
+                 human_status,
                  str(review.get("外部依赖与运行条件") or "NOT_VERIFIED")[:1200],
                  prompt,
                  {"sharpwizard/ironvale":"https://github.com/SharpWizard/ironvale/blob/main/PROMPTS.md",
                   "wquguru/fable52-fps-repro":"https://github.com/wquguru/fable52-fps-repro/tree/main/prompts"}.get(repo_raw,""),
                  entry,"TREE_PATH_REVIEWED_NOT_EXECUTED" if entry else "UNVERIFIED",
-                 "COMMUNITY_CLAIM",valid_url(r.get("GitHub仓库"))))
+                 model_evidence,valid_url(r.get("GitHub仓库"))))
         for r in posts:
             post_id = str(r.get("post_id") or "")
             key = post_id if re.fullmatch(r"\d+",post_id) else "orphan:" + post_id
@@ -241,6 +245,8 @@ def ingest(conn: sqlite3.Connection) -> dict:
                  work_id,r.get("match_status"),r.get("match_method"),
                  r.get("entity_resolution_status"),r.get("confidence"),r.get("model_claim"),
                  json.dumps(play,ensure_ascii=False),json.dumps(rr,ensure_ascii=False)))
+        # Replace only current source observations; immutable JSON snapshots remain the history.
+        conn.execute("DELETE FROM research_source_records")
         for r in sources:
             conn.execute("""INSERT INTO research_source_records
                 (source,source_id,post_id,post_url,title,category,author,play_url,repo_url,source_url)
@@ -268,7 +274,7 @@ def ingest(conn: sqlite3.Connection) -> dict:
                  valid_url(r.get("证据来源链接")),valid_url(r.get("原帖/补充链接")),
                  r.get("仍需核实")))
         # Exact repo + title only. No fuzzy matches and no migration of Fable model claims.
-        conn.execute("DELETE FROM research_project_links")
+        conn.execute("DELETE FROM research_project_links WHERE method='EXACT_REPO_AND_TITLE'")
         for r in conn.execute("""SELECT p.id AS project_id,p.title AS title,
               r.full_name AS repo FROM projects p JOIN project_repositories pr ON pr.project_id=p.id
               JOIN repositories r ON r.id=pr.repository_id""").fetchall():
