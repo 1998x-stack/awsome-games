@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "_comment": "Potential renames: shared repository identity is evidence of a catalog crosswalk, not proof of model authorship or originality. Never auto-approve.",
+  "aliases": [
+    {
+      "work_id": "F52-W015",
+      "project_id": "fab_b73d6b040fa950",
+      "repository_full_name": "StefanKnol/Last-Return",
+      "catalog_title": "Last Return",
+      "source_title": "Last Return（原 No Return）",
+      "evidence_url": "https://github.com/ygx2378/awesome-fable-5-2-games/blob/master/data/games.csv",
+      "status": "CANDIDATE",
+      "note": "Legacy seed and curated work record share exactly the same GitHub repository; verify original title before approval."
+    }
+  ]
+}
