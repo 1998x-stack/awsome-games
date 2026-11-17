@@ -89,6 +89,22 @@ Python scripts/research_pipeline.py 实现幂等导入、URL 清洗、表结构�
 - [Pelican](https://github.com/ChetasLua/pelican-riding-a-bicycle)：其关联的 mona-lisa-js 属于另一项目。
 - [steel-webgpu PR #7](https://github.com/skild-ai/steel-webgpu/pull/7)：一条尚未合并的功能 PR，并非独立游戏仓库。
 
+## 增量更新（生产式安全流程）
+
+首次导入只需运行 build_catalog.py；后续扫描新来源时，使用以下命令：
+
+    python3 scripts/refresh_research.py --dry-run
+    python3 scripts/refresh_research.py --write
+    python3 scripts/build_catalog.py --check
+    python3 scripts/build_site.py
+    python3 -m unittest discover -s tests -v
+
+refresh_research.py 只下载四个指定 GitHub 索引的 JSON 元数据；绝不克隆或执行第三方项目源码。新识别的原帖进入未验证状态；已有实体的人工标注仍保留。旧的 data/research/v1/ 历史快照保持不变；审核完的新来源写入 data/research/current/，新旧来源数不得直接按无时间范围汇总。
+
+若上游索引突然减少项目数，默认中止更新，需核实原因后才可添加 --allow-shrink。来源读取阶段不写入文件；所有来源全部成功后才使用临时文件与备份依次替换两个 current 快照，以尽量保护此前版本。正式生产建议再在 Git 版本控制中审核 JSON diff、保留校验哈希并分次发布。
+
+**谨慎使用 --write：当前仅生成本地快照，尚未配置定时自动提交 GitHub，因此不会声称后续来源已经被自动持续监控。**
+
 ## 尚未解决的部分
 
 多半原帖缺乏可核对的原版源码、Prompt 全文、Agent 操作日志、token 消耗、人工修改记录。静态文件树尚未实现对所有 83 仓库的**逐行**安全审计；也没有在此环境中完成 64 个游戏的独立浏览器操作。任何将它们写作“已实际可玩”的统计都是错误的。
