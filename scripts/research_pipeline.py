@@ -6,6 +6,7 @@ import re
 import sqlite3
 from pathlib import Path
 from urllib.parse import urlparse
+from refresh_research import load_current_pair
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data" / "research" / "v1"
@@ -80,6 +81,9 @@ CREATE TABLE IF NOT EXISTS research_post_reviews (
  work_id TEXT REFERENCES research_works(work_id),
  entity_id TEXT, confidence TEXT, reviewer_note TEXT NOT NULL DEFAULT '',
  reviewed_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS research_ingest_meta (
+ key TEXT PRIMARY KEY, value TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_research_posts_entity ON research_posts(entity_id);
 CREATE INDEX IF NOT EXISTS idx_research_posts_work ON research_posts(work_id);
@@ -157,8 +161,9 @@ def ingest(conn: sqlite3.Connection) -> dict:
     conn.executescript(DDL)
     repos = read("repositories.json")["records"]
     works = read("works.json")["records"]
-    posts = read("entities.json")["records"]
-    sources = read("sources.json")["records"]
+    source_doc,entity_doc = load_current_pair()
+    posts = entity_doc["records"]
+    sources = source_doc["records"]
     claims = read("claims.json")["records"]
     audit = {str(r.get("GitHub仓库","")).lower():r for r in read("readme_audits.json")["records"]}
     repo_names = {}
@@ -273,6 +278,10 @@ def ingest(conn: sqlite3.Connection) -> dict:
                  r.get("证据状态"),r.get("模型记录建议"),r.get("项目关系建议"),
                  valid_url(r.get("证据来源链接")),valid_url(r.get("原帖/补充链接")),
                  r.get("仍需核实")))
+        conn.execute("""INSERT INTO research_ingest_meta(key,value)
+            VALUES('captured_at',?)
+            ON CONFLICT(key) DO UPDATE SET value=excluded.value""",
+            (source_doc.get("captured_at") or source_doc.get("snapshot_date") or "unknown",))
         # Exact repo + title only. No fuzzy matches and no migration of Fable model claims.
         conn.execute("DELETE FROM research_project_links WHERE method='EXACT_REPO_AND_TITLE'")
         for r in conn.execute("""SELECT p.id AS project_id,p.title AS title,
@@ -339,7 +348,7 @@ def export_projection(conn: sqlite3.Connection) -> dict:
         FROM research_repositories ORDER BY lower(full_name)""")
     claims=objs("""SELECT * FROM research_claims ORDER BY claim_id""")
     stats=counts(conn)
-    return {"schema_version":1,"captured_at":read("sources.json").get("captured_at","2026-11-17"),
+    return {"schema_version":1,"captured_at":conn.execute("SELECT value FROM research_ingest_meta WHERE key='captured_at'").fetchone()[0],
             "warning":"Source records, original posts and works are different units. No third-party gameplay has been executed or verified.",
             "stats":stats,"works":works,"posts":posts,"repositories":repos,
             "claims":claims}
