@@ -61,6 +61,40 @@ class CollectorHardeningTests(unittest.TestCase):
         self.assertEqual((existing/'keep.txt').read_text(),'valuable')
         self.assertFalse(list((self.base/'snapshot').glob('.partial-*')))
 
+    def test_failed_repo_refresh_rolls_back_filesystem_and_sqlite(self):
+        from db import connect, now
+        (self.repo/'index.html').write_text('<!doctype html><title>new</title>')
+        self.track()
+        original=self.base/'snapshot/example__game'
+        original.mkdir(parents=True)
+        (original/'keep.html').write_text('<title>previous snapshot</title>')
+        conn=connect(self.base/'catalog.sqlite')
+        conn.execute("""INSERT INTO projects(id,slug,title,created_at,updated_at)
+                        VALUES('project-test','project-test','Sample',?,?)""",(now(),now()))
+        conn.execute("""INSERT INTO repositories(full_name,owner,name,html_url,clone_url,
+                          clone_status,clone_path,commit_sha)
+                        VALUES('example/game','example','game','https://github.com/example/game',
+                               'https://github.com/example/game.git','cloned',?,'old-sha')""",
+                     (str(original),))
+        rid=conn.execute("SELECT id FROM repositories WHERE full_name='example/game'").fetchone()[0]
+        conn.execute("INSERT INTO project_repositories(project_id,repository_id) VALUES('project-test',?)",(rid,))
+        conn.execute("""INSERT INTO repository_files(repository_id,relative_path,extension,sha256)
+                        VALUES(?,'keep.html','.html','original-hash')""",(rid,))
+        conn.commit()
+        row=conn.execute("SELECT * FROM repositories WHERE id=?",(rid,)).fetchone()
+        with patch.object(collector,'DEST',self.base/'snapshot'),patch.object(collector,'clone_one',return_value=(self.repo,'new-sha','main')),patch.object(collector,'choose_entry',side_effect=RuntimeError('simulated post-copy DB failure')):
+            result=collector.process_repo(conn,None,row,None,False,True,10_000,100_000)
+        self.assertEqual(result["status"],"error")
+        self.assertEqual((original/'keep.html').read_text(),'<title>previous snapshot</title>')
+        self.assertFalse((original/'index.html').exists())
+        status=conn.execute("SELECT clone_status,commit_sha,error_message FROM repositories WHERE id=?",(rid,)).fetchone()
+        self.assertEqual(status["clone_status"],"cloned")
+        self.assertEqual(status["commit_sha"],"old-sha")
+        self.assertIn("refresh_failed_preserved",status["error_message"])
+        paths=[r[0] for r in conn.execute("SELECT relative_path FROM repository_files WHERE repository_id=?",(rid,))]
+        self.assertEqual(paths,["keep.html"])
+        conn.close()
+
     def test_assets_relative_parent_allowed_but_escape_rejected(self):
         (self.repo/'games').mkdir()
         (self.repo/'shared').mkdir()
