@@ -38,7 +38,8 @@ def build(captures: list[dict], isolation: dict | None = None) -> dict:
             continue
         report = json.loads(report_path.read_text(encoding="utf-8"))
         status = report.get("status")
-        if status not in (GAMEPLAY_OK, LOAD_OK, "NO_OBSERVABLE_RESPONSE", "INCOMPLETE_OR_FAILED"):
+        if status not in (GAMEPLAY_OK, LOAD_OK, "NO_OBSERVABLE_RESPONSE",
+                          "INCOMPLETE_OR_FAILED", "TIMEOUT_ABORTED"):
             problems.append(f"unknown status in {report_path}: {status!r}")
             continue
         record = {

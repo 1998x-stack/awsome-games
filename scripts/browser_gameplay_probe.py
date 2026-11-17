@@ -20,13 +20,11 @@ import argparse
 import hashlib
 import json
 import os
-import threading
 from datetime import datetime, timezone
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import quote
 
-from browser_smoke import FRAME_SANDBOX, clean_entry, install_network_policy
+from browser_smoke import FRAME_SANDBOX, clean_entry, install_network_policy, serve_static_root
 
 STATUSES = ("INPUT_RESPONSIVE", "NO_OBSERVABLE_RESPONSE", "INCOMPLETE_OR_FAILED")
 # Keys that almost any browser game uses for movement / action.
@@ -87,39 +85,12 @@ def probe(root: Path, entry: str, screenshot: Path | None = None,
 
     root = root.resolve()
     clean_entry(root, entry)
-
-    class Handler(SimpleHTTPRequestHandler):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, directory=str(root), **kwargs)
-
-        def translate_path(self, path):
-            target = Path(super().translate_path(path)).resolve()
-            if not target.is_relative_to(root):
-                return str(root / "__denied__")
-            return str(target)
-
-        def do_GET(self):
-            if self.path.split("?", 1)[0] == "/__gameplay_host__":
-                payload = ('<html><head><meta charset="utf-8"><title>Isolated gameplay host</title>'
-                           '<style>html,body{margin:0;height:100%}iframe{width:100%;height:100%;border:0;display:block}</style>'
-                           '</head><body><iframe title="third party game" sandbox="' + FRAME_SANDBOX
-                           + '" referrerpolicy="no-referrer" src="/' + quote(entry, safe="/")
-                           + '"></iframe></body></html>').encode()
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html;charset=utf-8")
-                self.send_header("Content-Length", str(len(payload)))
-                self.end_headers()
-                self.wfile.write(payload)
-            else:
-                super().do_GET()
-
-        def log_message(self, *args):
-            return
-
-    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    port = server.server_address[1]
+    host_html = ('<html><head><meta charset="utf-8"><title>Isolated gameplay host</title>'
+                 '<style>html,body{margin:0;height:100%}iframe{width:100%;height:100%;border:0;display:block}</style>'
+                 '</head><body><iframe title="third party game" sandbox="' + FRAME_SANDBOX
+                 + '" referrerpolicy="no-referrer" src="/' + quote(entry, safe="/")
+                 + '"></iframe></body></html>')
+    server, thread, port = serve_static_root(root, "/__gameplay_host__", lambda query: host_html)
 
     result = {
         "tested_at": datetime.now(timezone.utc).isoformat(),

@@ -33,7 +33,8 @@ RUN apt-get update \
 # No collector source is baked in. The staged artifact is mounted read-only at
 # run time so a compromised page can never mutate the evidence it came from.
 WORKDIR /work
-COPY scripts/browser_smoke.py scripts/browser_gameplay_probe.py scripts/browser_fixture_probe.py /work/
+COPY scripts/browser_smoke.py scripts/browser_gameplay_probe.py scripts/browser_batch_probe.py /work/
+COPY scripts/browser_fixture_probe.py /work/
 
 # Arbitrary non-root uid mapping is expected (--user), so keep /tmp world-writable.
 RUN mkdir -p /reports && chmod 1777 /tmp /reports

@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse, quote, unquote
+from urllib.parse import urlparse, quote, unquote, parse_qs
 
 FRAME_SANDBOX = "allow-scripts allow-pointer-lock allow-forms allow-modals"
 
@@ -84,32 +84,54 @@ def clean_entry(root: Path, entry: str) -> Path:
         raise ValueError("entry must exist inside the selected local root")
     return full
 
+def serve_static_root(root: Path, host_path: str, host_builder):
+    """Serve `root` read-only on loopback plus one synthetic host page.
+
+    `host_builder` receives the parsed query string of the host request and
+    returns the host HTML, so a batch run can pick its target per navigation.
+    Returns (server, thread, port); callers must shutdown/close/join.
+    """
+    root = root.resolve()
+
+    class Handler(SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=str(root), **kwargs)
+
+        def translate_path(self, path):
+            target = Path(super().translate_path(path)).resolve()
+            if not target.is_relative_to(root):
+                return str(root / "__denied__")
+            return str(target)
+
+        def do_GET(self):
+            if self.path.split("?", 1)[0] == host_path:
+                payload = host_builder(parse_qs(urlparse(self.path).query)).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html;charset=utf-8")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+            else:
+                super().do_GET()
+
+        def log_message(self, *args):
+            return
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    return server, thread, server.server_address[1]
+
+
 def smoke(root: Path, entry: str, screenshot: Path | None=None, timeout_ms: int=15000) -> dict:
     """Requires optional pip install playwright; caller must provide safe container/VM."""
     from playwright.sync_api import sync_playwright
     root=root.resolve()
     clean_entry(root,entry)
-    class Handler(SimpleHTTPRequestHandler):
-        def __init__(self,*args,**kwargs):
-            super().__init__(*args,directory=str(root),**kwargs)
-        def translate_path(self,path):
-            target=Path(super().translate_path(path)).resolve()
-            if not target.is_relative_to(root):return str(root/'__denied__')
-            return str(target)
-        def do_GET(self):
-            if self.path.split("?",1)[0]=="/__isolated_smoke_host__":
-                payload=('<html><head><meta charset="utf-8"><title>Isolated test host</title></head>'
-                         '<body><h1>Smoke test</h1><iframe title="third party" sandbox="'
-                         +FRAME_SANDBOX+'" referrerpolicy="no-referrer" src="/'+quote(entry,safe='/')+'"></iframe></body></html>').encode()
-                self.send_response(200);self.send_header("Content-Type","text/html;charset=utf-8")
-                self.send_header("Content-Length",str(len(payload)));self.end_headers();self.wfile.write(payload)
-            else:super().do_GET()
-        def log_message(self,*args):
-            return
-    server=ThreadingHTTPServer(("127.0.0.1",0),Handler)
-    thread=threading.Thread(target=server.serve_forever,daemon=True)
-    thread.start()
-    port=server.server_address[1]
+    host_html=('<html><head><meta charset="utf-8"><title>Isolated test host</title></head>'
+               '<body><h1>Smoke test</h1><iframe title="third party" sandbox="'
+               +FRAME_SANDBOX+'" referrerpolicy="no-referrer" src="/'+quote(entry,safe='/')+'"></iframe></body></html>')
+    server,thread,port=serve_static_root(root,"/__isolated_smoke_host__",lambda query: host_html)
     result={"tested_at":datetime.now(timezone.utc).isoformat(),"entry":entry,"status":"NOT_RUN",
             "iframe_isolation":False,"frame_body_loaded":False,"console_errors":[],
             "blocked_requests":[],"blocked_websockets":[],"stubbed_cosmetic_requests":[],
