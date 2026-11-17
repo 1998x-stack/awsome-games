@@ -35,6 +35,16 @@ class SiteLinkPolicyTests(unittest.TestCase):
         for kind in ("repositories", "posts", "works"):
             self.assertIn(f"'./research.html?kind={kind}", js)
 
+    def test_internal_links_do_not_force_a_new_tab(self):
+        """A same-origin audit-trail hop must stay in the current tab."""
+        for name in ("review.js", "research.js"):
+            js = self.source(name)
+            self.assertRegex(
+                js, r"external=new URL\(href,document\.baseURI\)\.origin!==location\.origin", name)
+            self.assertRegex(js, r"if\(external\)\{a\.target='_blank'", name)
+            # No unconditional new-tab assignment may remain.
+            self.assertNotRegex(js, r";a\.target='_blank';", name)
+
     def test_no_hardcoded_research_counts_in_static_markup(self):
         """Counts must come from the built projection, never from frozen prose."""
         for name in ("index.html", "research.html", "review.html"):

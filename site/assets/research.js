@@ -27,7 +27,11 @@
   function link(url,label){
     const href=safeUrl(url);if(!href)return text('span',label||url);
     const a=document.createElement('a');a.href=href;a.textContent=label||href;
-    a.target='_blank';a.rel='noopener noreferrer';a.referrerPolicy='no-referrer';return a;
+    // Same-origin targets stay in this tab; external evidence opens a new one.
+    let external=true;
+    try{external=new URL(href,document.baseURI).origin!==location.origin}catch{external=true}
+    if(external){a.target='_blank';a.rel='noopener noreferrer';a.referrerPolicy='no-referrer'}
+    return a;
   }
   function info(kind,item){
     if(kind==='works'){

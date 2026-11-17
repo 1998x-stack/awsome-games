@@ -37,7 +37,14 @@
   };
   function makeLink(url,label){
     const href=safeUrl(url),a=elt(href?'a':'span',label);
-    if(href){a.href=href;a.target='_blank';a.rel='noopener noreferrer';a.referrerPolicy='no-referrer'}
+    if(href){
+      a.href=href;
+      // Only external evidence opens a new tab. The Evidence Lab deep link is
+      // same-origin and must navigate in place so the audit trail stays in one tab.
+      let external=true;
+      try{external=new URL(href,document.baseURI).origin!==location.origin}catch{external=true}
+      if(external){a.target='_blank';a.rel='noopener noreferrer';a.referrerPolicy='no-referrer'}
+    }
     return a;
   }
   function card(r){
