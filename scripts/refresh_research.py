@@ -9,6 +9,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import tempfile
 from collections import Counter
 from datetime import date
@@ -89,7 +90,7 @@ def prepare(base=BASE,current=CURRENT,fetch=fetch_json,allow_shrink=False):
     for source,url in SOURCES:
         payload=fetch(url)
         entries=payload.get("entries") if source=="DramaSo" else payload
-        if not isinstance(entries,list):raise ValueError("Invalid upstream JSON: "+source)
+        if not isinstance(entries,list) or not entries:raise ValueError("Empty or invalid upstream JSON: "+source)
         unique=set()
         for i,x in enumerate(entries):
             r=normalize(source,x,i,url)
@@ -119,6 +120,31 @@ def write_json(target,content):
     finally:
         if os.path.exists(temp):os.unlink(temp)
 
+def publish_pair(sources,entities,target=CURRENT):
+    """Stage and validate both files, then replace them with rollback on failure."""
+    target.mkdir(parents=True,exist_ok=True)
+    names=("sources.json","entities.json")
+    with tempfile.TemporaryDirectory(prefix=".research-txn-",dir=target) as tmp:
+        stage=Path(tmp)
+        for name,obj in zip(names,(sources,entities)):
+            write_json(stage/name,obj)
+            json.loads((stage/name).read_text(encoding="utf-8"))
+        for name in names:
+            original=target/name
+            if original.is_file():shutil.copy2(original,stage/("backup-"+name))
+        replaced=[]
+        try:
+            for name in names:
+                os.replace(stage/name,target/name)
+                replaced.append(name)
+        except BaseException:
+            for name in reversed(replaced):
+                original=target/name
+                backup=stage/("backup-"+name)
+                if backup.exists():os.replace(backup,original)
+                else:original.unlink(missing_ok=True)
+            raise
+
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     g=p.add_mutually_exclusive_group()
@@ -128,8 +154,7 @@ def main():
     args=p.parse_args()
     sources,entities,new=prepare(allow_shrink=args.allow_shrink)
     if args.write:
-        write_json(CURRENT/"sources.json",sources)
-        write_json(CURRENT/"entities.json",entities)
+        publish_pair(sources,entities,CURRENT)
     print(json.dumps({"source_records":len(sources["records"]),"original_post_candidates":len(entities["records"]),
                       "new_x_post_ids":new,"written":args.write},ensure_ascii=False))
 
