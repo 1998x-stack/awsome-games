@@ -80,7 +80,7 @@ docker info --format 'CPUs={{.NCPU}} Mem={{.MemTotal}}'
     # 1) 分离启动（进度写到容器 stdout，snapshot 在命名卷里）
     SMOKE_VOLUME=ag-shard1-vol bash scripts/isolation/run_isolated_smoke.sh \
       --mode batch --detach --name ag-shard1 \
-      --root games --manifest .cache/shards/shard1/manifest.tsv \
+      --root games --manifest .cache/shards/shard1/manifest.json \
       --out .cache/shards/shard1/reports --per-entry-timeout 60
 
     # 2) 等待：每 60 秒最多一次，只看最后 3 行
@@ -92,10 +92,9 @@ docker info --format 'CPUs={{.NCPU}} Mem={{.MemTotal}}'
 
 要点：
 
-* in-container 驱动 `scripts/isolation/batch_loop.sh` 是**外层**监督者：它用 `timeout -s KILL` 包住每条入口，
-  所以 Python 永远不需要去杀 Python（页面可以同步阻塞 `evaluate`，Python 侧等待无法中断）。
+* 批处理使用 `scripts/browser_batch_probe.py` 的 `run_batch`，为每条入口调用外部 `timeout -s KILL`，并记录 `TIMEOUT_ABORTED`；不再使用已删除的 `batch_loop.sh`。
 * `--detach` 会刻意**去掉 `--rm`**：容器必须活过自己的退出，否则 `--collect` 无从复制报告。
-* 入口清单与报告目录都按 `--name` 分域（`.cache/isolation-manifest-<name>.tsv`、独立卷），
+* 入口清单与报告目录都按 `--name` 分域（`.cache/isolation-manifest-<name>.json`、独立卷），
   并行分片不会互相覆盖。
 * 容器 stdout 就是进度流，所以不必再起第 3 个容器去看进度——这正是最初拖慢整批的代价。
 * 分片数要匹配 VM 的 CPU 数：2 个 CPU 就 2 个分片各 `--cpus 1`，超过只会互相挤。

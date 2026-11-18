@@ -26,6 +26,7 @@ jobs:
         run: |
           python scripts/build_catalog.py
           python scripts/check_catalog.py
+          python scripts/audit_database.py --profile full
           python scripts/build_site.py
           node --check site/assets/app.js
           node --check site/assets/research.js
