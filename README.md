@@ -52,7 +52,8 @@
 ## 文件与数据库审计（2026-11-18）
 
 - [仓库结构与文件职责](docs/REPOSITORY_STRUCTURE.md)：跟踪文件、生成物、第三方源码和发布审批的边界。
-- [SQLite 数据库审计与迁移基线](docs/DATABASE_AUDIT.md)：表结构、数据主权、完整性检查及未来迁移协议。
+- [SQLite 数据库审计与迁移基线](docs/DATABASE_AUDIT.md)：表结构、数据主权与完整性检查。
+- [SQLite 版本迁移与回滚](docs/SCHEMA_MIGRATIONS.md)：已验证 Schema 的 v1 登记、WAL 备份、数据摘要对照与副本验收。
 - 非修改式数据库检查：`python scripts/audit_database.py --profile full`（不创建缺失数据库、不执行游戏代码）。
 
 ## 项目结构
