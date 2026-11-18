@@ -40,8 +40,14 @@ def export_seed(database: Path, destination: Path) -> int:
             'prompt_urls': [x['prompt_url'] for x in prompts],
             'prompt_status': p['prompt_status'] or '',
             'evidence': sorted({x['evidence_type'] for x in evidence}),
-            'evidence_by_source': {x['url']: {'evidence_type': x['evidence_type'],
-                                             'confidence': x['confidence']} for x in evidence},
+            # Different evidence_type values may cite the same source URL.
+            # A dict keyed only by URL formerly discarded all but the last row.
+            'evidence_by_source': {
+                url: [
+                    {'evidence_type': x['evidence_type'], 'confidence': x['confidence']}
+                    for x in evidence if x['url'] == url
+                ] for url in srcs
+            },
             '_reconstruction_origin': 'data/catalog.sqlite',
         })
     conn.close()
