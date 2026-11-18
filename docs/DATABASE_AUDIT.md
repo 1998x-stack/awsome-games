@@ -79,3 +79,10 @@ The schema fingerprint was `21fdf1d9dbcb2262ffdbbb77b7120efcc622b70835a6cfbaaa19
 ## 实施中的 v1 Migration 机制
 
 参见 [SCHEMA_MIGRATIONS.md](SCHEMA_MIGRATIONS.md)。`migrate_database.py` 将已验证的 26 表 v0 结构登记为迁移版本 1，先创建 WAL 安全的完整备份，再在事务中执行，仅新增 `schema_migrations` 并设置 `user_version=1`；全部既有数据行的逻辑 SHA-256 必须保持不变。CI 只在临时副本验收升级，已提交的 `data/catalog.sqlite` 保持 v0，未来实际迁移须经独立审核。
+
+
+## playable_status 一致性协议（2026-11-18）
+
+由 `scripts/playability_policy.py` 统一计算 `projects.playable_status`。顺序是：首先可用的单独仓库入口，再是带证据的限制性结论，然后是未入库/缺资源/需构建等状态。聚合只用于作品展示，**不能授权发布另一仓库的文件**；公开发布始终要求逐个 `project_repositories` 入口满足白名单、实物和沙箱条件。采集器、普查写回器、未入库整理器必须复用统一函数。
+
+普查 PASS 只允许在具备原始指纹、clean errors、明确隔离标志与有效状态的情况下撤回旧限制性结论；撤回目标是 `runtime_needs_retest`，不是可发布的 `entrypoint_found`。重新发布须通过独立人工审核与发布批准，不能从像素变化推断。
