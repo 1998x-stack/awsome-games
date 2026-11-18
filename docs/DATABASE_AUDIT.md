@@ -54,3 +54,23 @@ PR #15 documented 155 catalog projects, 54 repositories, 150 project-to-reposito
 ## What is not established
 
 This audit does **not** perform a versioned migration, license audit, external URL verification or full game behavior E2E test. `build_catalog.py --check` writes the imported snapshot before checking it; `check_catalog.py` calls a DDL-initializing connection. Only the new auditor is designed to be non-mutating.
+
+## Verified GitHub Actions database snapshot — 2026-11-18
+
+The actual GitHub Actions `Validate catalog` job ([run 44235214997](https://github.com/1998x-stack/awsome-games/actions/runs/44235214997), commit `457e61c`) completed successfully on the proposed branch after rebuilding the catalog. Its read-only audit reported:
+
+| Measure | Verified value |
+| --- | ---: |
+| SQLite `integrity_check` | `ok` |
+| Foreign-key violations | 0 |
+| Auditor problems | 0 |
+| Tables / indexes / views / triggers | 26 / 10 / 1 / 0 |
+| `PRAGMA user_version` | 0 (not a migration claim) |
+| Missing `game_path` for `entrypoint_found` | 0 |
+| `projects` / `repositories` / `project_repositories` | 155 / 54 / 150 |
+| `repository_files` | 20,071 |
+| `research_repositories` / `research_works` / `research_posts` | 83 / 64 / 907 |
+| `research_source_records` / `research_project_links` | 1,118 / 63 |
+| `research_runtime_evidence` / `research_review_history` | 0 / 0 |
+
+The schema fingerprint was `21fdf1d9dbcb2262ffdbbb77b7120efcc622b70835a6cfbaaa1993bbcfca0cd0`. The 26th table is optional `research_review_history`, present with zero records. This is evidence of **database structural consistency**, not of game playability or third-party licenses. The source code for this PR was also exercised by six new isolated regression tests.
