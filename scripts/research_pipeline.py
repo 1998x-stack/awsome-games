@@ -120,8 +120,10 @@ REVIEWED_ENTRIES = {
  ("wquguru/fable52-fps-repro", "sublevel 07"): "demos/04-fps/index.html",
  ("SharpWizard/ironvale", "ironvale"): "ironvale.html",
  ("DNDNoob/EmberDeep", "emberdeep"): "index.html",
- ("GavinLOrio/Fable-5.2-random-game", "aquila"): "index.html",
- ("GavinLOrio/Fable-5.2-random-game", "dawnward"): "rome/index.html",
+ # Upstream README (pinned commit 447d0b5a7947fed9f2916c151c5aaf41522a96b1)
+ # explicitly associates Aquila with rome/ and Dawnward with root index.html.
+ ("GavinLOrio/Fable-5.2-random-game", "aquila"): "rome/index.html",
+ ("GavinLOrio/Fable-5.2-random-game", "dawnward"): "index.html",
  ("S77FFY/daedalus", "daedalus"): "index.html",
  ("hahaliu1029/fable5.2demo", "tidebell 潮钟"): "tidebell/index.html",
  ("hahaliu1029/fable5.2demo", "mothlight // vesper-9"): "mothlight/index.html",

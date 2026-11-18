@@ -61,7 +61,9 @@ Official API: https://playwright.dev/python/docs/api/class-browsercontext#browse
 
 **已验证范围：** 2026-11-17 在本仓库自编写的无害 fixture（`.cache/isolated-stage`，非第三方代码）上跑通，得到 `BROWSER_LOAD_CHECKED`、`iframe_isolation: true`、无控制台错误、无阻断请求，并保存截图。**第三方游戏仍未在此隔离环境中执行：保持 `NOT_TESTED`。**
 
-自报浏览器报告无法被冒用：`scripts/import_browser_report.py` 只接受与 `research_works.entry_path`（已人工审阅的入口）完全一致的 staged 文件，并锁定 40 位 commit SHA。用自编 fixture 去冒领真实 work_id 会被拒绝，`research_runtime_evidence` 保持 0 行。
+自报浏览器报告不得冒用：`scripts/import_browser_report.py` 现在还要求审核文件 `data/research/audits/<work-id>.json` 的仓库、固定 commit、入口路径及 Git blob SHA 与 staged HTML 字节一致。仅提交看似合法的 40 位 SHA 已不足以入库；成功加载时还必须提供截图供 SHA-256 核验。用自编 fixture 去冒领真实 work_id 会被拒绝，`research_runtime_evidence` 保持 0 行。
+
+**注意：** 这些审计文件为静态证据而非许可证或人工运行授权。未经明确人工确认，禁止运行任何第三方入口。
 
 
 

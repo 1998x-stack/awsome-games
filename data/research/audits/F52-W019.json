@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "work_id": "F52-W019",
+  "title": "MOTHLIGHT // Vesper-9",
+  "repo": "hahaliu1029/fable5.2demo",
+  "repository_commit_sha": "97710fad3ca3cbfb6e91b852644bc513ace0a342",
+  "entry_path": "mothlight/index.html",
+  "entry_git_blob_sha": "99e130e83b02103f0c289e96b81648093fedc95c",
+  "entry_bytes_git_tree": 1171360,
+  "source_file_full_text_read": true,
+  "source_chars_read": 1171345,
+  "source_lines": 4830,
+  "source_link": "https://github.com/hahaliu1029/fable5.2demo/blob/97710fad3ca3cbfb6e91b852644bc513ace0a342/mothlight/index.html",
+  "readme_link": "https://github.com/hahaliu1029/fable5.2demo/blob/97710fad3ca3cbfb6e91b852644bc513ace0a342/README.md",
+  "inspection_method": "READ_ONLY_PINNED_GIT_BLOB_FULL_TEXT_WITH_LEXICAL_PATTERNS",
+  "inspection_scope": "ENTRY_FILE_ONLY; other source files, images, binary assets, build scripts and transitive dependencies need additional scans",
+  "review_status": "PARTIAL_STATIC_AUDIT_NOT_APPROVED",
+  "gameplay_status": "NOT_TESTED",
+  "license_spdx_repo_metadata": "Apache-2.0",
+  "license_rights_verified": false,
+  "relation_claim": "MULTI_WORK_REPOSITORY",
+  "relation_note": "Generated bundled HTML; source scripts and asset provenance separately reviewed before distribution.",
+  "static_indicators": {
+    "unique_literal_urls": [
+      "http://www.w3.org/1999/xhtml"
+    ],
+    "script_src": [],
+    "link_href": [],
+    "lexical_hits": {
+      "fetch_call": 1,
+      "websocket": 0,
+      "xhr": 0,
+      "webrtc": 0,
+      "media_devices": 0,
+      "send_beacon": 0,
+      "eval": 0,
+      "new_function": 0,
+      "dynamic_import": 0,
+      "service_worker": 0,
+      "local_storage": 3,
+      "indexed_db": 0,
+      "iframe": 0,
+      "script_src": 0,
+      "importmap": 0
+    }
+  },
+  "external_requests_verified": false,
+  "build_verified": false,
+  "model_authorship_verified": false,
+  "redistribution_approved": false
+}

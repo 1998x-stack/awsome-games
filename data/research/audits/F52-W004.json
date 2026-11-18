@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "work_id": "F52-W004",
+  "title": "Aquila",
+  "repo": "GavinLOrio/Fable-5.2-random-game",
+  "repository_commit_sha": "447d0b5a7947fed9f2916c151c5aaf41522a96b1",
+  "entry_path": "rome/index.html",
+  "entry_git_blob_sha": "386e547e9c6d7e1ec619f4c50d3d2b8e78066b4f",
+  "entry_bytes_git_tree": 876735,
+  "source_file_full_text_read": true,
+  "source_chars_read": 876733,
+  "source_lines": 5209,
+  "source_link": "https://github.com/GavinLOrio/Fable-5.2-random-game/blob/447d0b5a7947fed9f2916c151c5aaf41522a96b1/rome/index.html",
+  "readme_link": "https://github.com/GavinLOrio/Fable-5.2-random-game/blob/447d0b5a7947fed9f2916c151c5aaf41522a96b1/README.md",
+  "inspection_method": "READ_ONLY_PINNED_GIT_BLOB_FULL_TEXT_WITH_LEXICAL_PATTERNS",
+  "inspection_scope": "ENTRY_FILE_ONLY; other source files, images, binary assets, build scripts and transitive dependencies need additional scans",
+  "review_status": "PARTIAL_STATIC_AUDIT_NOT_APPROVED",
+  "gameplay_status": "NOT_TESTED",
+  "license_spdx_repo_metadata": "NONE",
+  "license_rights_verified": false,
+  "relation_claim": "MULTI_WORK_REPOSITORY",
+  "relation_note": "rome/index is Aquila; see upstream README for correction of previously reversed mapping.",
+  "static_indicators": {
+    "unique_literal_urls": [
+      "https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Alegreya+Sans:wght@400;500;700&display=swap",
+      "http://www.w3.org/1999/xhtml"
+    ],
+    "script_src": [],
+    "link_href": [
+      "https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Alegreya+Sans:wght@400;500;700&display=swap"
+    ],
+    "lexical_hits": {
+      "fetch_call": 0,
+      "websocket": 0,
+      "xhr": 0,
+      "webrtc": 0,
+      "media_devices": 0,
+      "send_beacon": 0,
+      "eval": 0,
+      "new_function": 0,
+      "dynamic_import": 0,
+      "service_worker": 0,
+      "local_storage": 3,
+      "indexed_db": 0,
+      "iframe": 0,
+      "script_src": 0,
+      "importmap": 0
+    }
+  },
+  "external_requests_verified": false,
+  "build_verified": false,
+  "model_authorship_verified": false,
+  "redistribution_approved": false
+}

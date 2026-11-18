@@ -1,0 +1,254 @@
+{
+  "schema_version": 1,
+  "repository_full_name": "DNDNoob/EmberDeep",
+  "pinned_commit_sha": "53db7db90ed299cc4de11d21f631bc9bd120e5ec",
+  "pinned_branch_name": "claude/project-thread-549n8h",
+  "pinned_tree_verified_not_truncated": true,
+  "source": "https://github.com/DNDNoob/EmberDeep/tree/53db7db90ed299cc4de11d21f631bc9bd120e5ec",
+  "repository_metadata_license_spdx": "NOASSERTION",
+  "license_and_asset_rights_approved": false,
+  "community_relation": "CURATED_GAME_REPO_CANDIDATE",
+  "community_relation_note": "仅文件树已核验；生成模型未逐仓追查",
+  "browser_status": "NOT_TESTED",
+  "audit_status": "FULL_GIT_TREE_INVENTORY_ONLY_WITH_ENTRY_HTML_SCANS",
+  "work_reports": [
+    "data/research/audits/F52-W034.json"
+  ],
+  "file_count": 33,
+  "entry_html_scan_count": 1,
+  "unread_source_or_doc_files": 19,
+  "binary_and_other_metadata_files": 13,
+  "files": [
+    {
+      "path": ".gitignore",
+      "git_blob_sha": "c2658d7d1b31848c3b71960543cb0368e56cd4c7",
+      "size_bytes": 14,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": ".nojekyll",
+      "git_blob_sha": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+      "size_bytes": 0,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "README.md",
+      "git_blob_sha": "79d952177f79d2ad92429c411f8e642fcdea2238",
+      "size_bytes": 4892,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "assets/photos/0_alb.jpg",
+      "git_blob_sha": "89f296f517e4cb67ed795567e8fa10929c501318",
+      "size_bytes": 218484,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "assets/photos/0_h.jpg",
+      "git_blob_sha": "3b673c115b2f165459353c43ee60cf243532ef8d",
+      "size_bytes": 107758,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "assets/photos/13_alb.jpg",
+      "git_blob_sha": "cda62cce4499facdab33c9edd17c009e8ceaff6b",
+      "size_bytes": 156695,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "assets/photos/13_h.jpg",
+      "git_blob_sha": "560b0f2f0c04de7205ead2533115ecc666677be6",
+      "size_bytes": 36164,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "assets/photos/1_alb.jpg",
+      "git_blob_sha": "df9ec37e71ed4903476c300be232cbb0abdab77e",
+      "size_bytes": 182532,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "assets/photos/1_h.jpg",
+      "git_blob_sha": "10d1c02d183d656d39974d748a485a93be8e7074",
+      "size_bytes": 108404,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "assets/src/forge-1412.png",
+      "git_blob_sha": "7e4b494f12b4ad7e8e023d292437a4f9177502eb",
+      "size_bytes": 1949297,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "assets/src/forge-1413.png",
+      "git_blob_sha": "85c467e191aa6ed1f4f1fb5a8dde99813829cec3",
+      "size_bytes": 1833391,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "assets/src/forge-1414.png",
+      "git_blob_sha": "35b5f0b2cf0cf07459da3ac501d6ddacbe545d8e",
+      "size_bytes": 1878725,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "assets/src/forge-1415.png",
+      "git_blob_sha": "a87683b7b7f96ba527c9fcc1450babb7197e5796",
+      "size_bytes": 1818176,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "assets/src/forge-1416.png",
+      "git_blob_sha": "50e3257add4f9be95b49a08e40e90d049280f9fa",
+      "size_bytes": 1760026,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "assets/src/forge-1417.png",
+      "git_blob_sha": "9ab1dcfc63a63ec1cfc4af2794d87c3dfca23136",
+      "size_bytes": 1798118,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "assets/src/forge-1418.png",
+      "git_blob_sha": "134315f6dc0d28e851a7d8466927fdd40b9f60d8",
+      "size_bytes": 1855561,
+      "media_class": "BINARY_OR_UNCLASSIFIED",
+      "inspection_status": "METADATA_ONLY_NOT_EXECUTED"
+    },
+    {
+      "path": "build.mjs",
+      "git_blob_sha": "45199e9324d1a931b327c2de7224153a1e22fbce",
+      "size_bytes": 673,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "classic.html",
+      "git_blob_sha": "e776a04dc56d1c3165260a5ff727a7d288324ece",
+      "size_bytes": 164597,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "docs/mimic-brain.md",
+      "git_blob_sha": "38d6677179c392a2351f72ee321d74854f830000",
+      "size_bytes": 2454,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "index.html",
+      "git_blob_sha": "379b21ca87fafe5edef917d38d20b77835f392d0",
+      "size_bytes": 1936993,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "ENTRY_TEXT_SCAN_RECORDED_IN_WORK_REPORT"
+    },
+    {
+      "path": "package-lock.json",
+      "git_blob_sha": "650022289b50f18e89707956bd1babd036f0af3e",
+      "size_bytes": 15696,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "package.json",
+      "git_blob_sha": "39de8d9e39fed384b90557ef6f7a516ed74032aa",
+      "size_bytes": 243,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/classic.js",
+      "git_blob_sha": "360727caac04d5764a7c72a784dc8663bf4a37c3",
+      "size_bytes": 150464,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/game.js",
+      "git_blob_sha": "2dbca3ac4e0358bbbb26d2ee45a69aa760681773",
+      "size_bytes": 205110,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/net.js",
+      "git_blob_sha": "246a1cc1e7ebb8ac337f1d4031bc921a10b7c918",
+      "size_bytes": 6013,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/photos.js",
+      "git_blob_sha": "86856800dc006bdb25c20182b2de137ac68cb052",
+      "size_bytes": 1080448,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/rooms.js",
+      "git_blob_sha": "60cc08169a224712471a40dd56701d618c8a6cac",
+      "size_bytes": 26455,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/shell.html",
+      "git_blob_sha": "b7b77f70f54fb17f6077cdbd136b2803331296c4",
+      "size_bytes": 19095,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/textures.js",
+      "git_blob_sha": "d23eb9f75c308cd3100cbb76c493d9f741f0731f",
+      "size_bytes": 24286,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "src/voice.js",
+      "git_blob_sha": "fbb218ffa760acb514e00b6932ce2a04b538fd27",
+      "size_bytes": 5468,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "tools/mimic_brain.py",
+      "git_blob_sha": "58f8f272d0b6fe4d2ebf6690191cbdbf45baab92",
+      "size_bytes": 7612,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "tools/photo_tex.py",
+      "git_blob_sha": "639790bb9b8768fb5181df2a02921cd799dd8200",
+      "size_bytes": 3673,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    },
+    {
+      "path": "tools/port.py",
+      "git_blob_sha": "088a9074767bbd81e1ea01b700c43b87ac4cb43e",
+      "size_bytes": 3599,
+      "media_class": "TEXT_OR_CODE",
+      "inspection_status": "CONTENT_AUDIT_PENDING"
+    }
+  ]
+}

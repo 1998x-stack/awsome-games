@@ -40,8 +40,14 @@ def export_seed(database: Path, destination: Path) -> int:
             'prompt_urls': [x['prompt_url'] for x in prompts],
             'prompt_status': p['prompt_status'] or '',
             'evidence': sorted({x['evidence_type'] for x in evidence}),
-            'evidence_by_source': {x['url']: {'evidence_type': x['evidence_type'],
-                                             'confidence': x['confidence']} for x in evidence},
+            # One source URL may legitimately support several distinct evidence types.
+            # Keep all rows; the previous dict comprehension silently kept only
+            # the final (url, evidence_type) pair from the SQL result.
+            'evidence_by_source': {
+                url: [{'evidence_type': x['evidence_type'],
+                       'confidence': x['confidence']} for x in evidence if x['url'] == url]
+                for url in srcs
+            },
             '_reconstruction_origin': 'data/catalog.sqlite',
         })
     conn.close()
