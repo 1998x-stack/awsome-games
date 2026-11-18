@@ -1,9 +1,9 @@
 {
   "captured_at": "2026-11-18T03:40:00Z",
   "base_sha": "0f6ed51",
-  "head_sha": "PENDING_COMMIT",
+  "head_sha": "bf3d05d",
   "branch": "feat/deep-build-all-repos",
-  "pr": "PENDING",
+  "pr": "https://github.com/1998x-stack/awsome-games/pull/15",
   "scope": "Measure every entrypoint that exists locally, in a disposable network-isolated container, using subagents for parallel shards, and make the conclusion reproducible.",
   "environment": {
     "os": "Darwin arm64 (macOS, Apple Silicon)",
@@ -324,5 +324,6 @@
     "Write per-game behavioural assertions for the 4 attributable works: from input_responsive toward a defensible GAMEPLAY_VERIFIED.",
     "M2 read-only audit of the 32 research candidates before adding them to the collection queue.",
     "Decide the retry policy for RENDERER_CRASHED_ENVIRONMENT_LIMIT entries (more memory is not available on this host)."
-  ]
+  ],
+  "note_on_sha": "head_sha is the commit that carries this round's measured state. The JSON file itself is updated in a small follow-up commit that changes no measured value."
 }
