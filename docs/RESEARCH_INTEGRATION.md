@@ -138,3 +138,8 @@ refresh_research.py 只下载四个指定 GitHub 索引的 JSON 元数据；绝�
 
 CI 必须在 Pages 发布前先运行全部数据完整性、归并、发布沙箱及文件回滚测试。此流程不意味着第三方游戏已经实测通过。
 
+
+
+### 固定源码证据修复（2026-11-18；从 PR #12 独立拆分）
+
+GavinLOrio/Fable-5.2-random-game 在 [固定提交 447d0b5a 的 README](https://github.com/GavinLOrio/Fable-5.2-random-game/blob/447d0b5a7947fed9f2916c151c5aaf41522a96b1/README.md) 明确写明：Aquila → `rome/index.html`、Dawnward → `index.html`；该固定 Git 文件树均存在这两个入口。原研究映射反置，已纠正并纳入独立测试。这是源文件入口归属证据，**并非**浏览器交互或版权验证。

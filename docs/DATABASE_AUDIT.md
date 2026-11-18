@@ -86,3 +86,10 @@ The schema fingerprint was `21fdf1d9dbcb2262ffdbbb77b7120efcc622b70835a6cfbaaa19
 由 `scripts/playability_policy.py` 统一计算 `projects.playable_status`。顺序是：首先可用的单独仓库入口，再是带证据的限制性结论，然后是未入库/缺资源/需构建等状态。聚合只用于作品展示，**不能授权发布另一仓库的文件**；公开发布始终要求逐个 `project_repositories` 入口满足白名单、实物和沙箱条件。采集器、普查写回器、未入库整理器必须复用统一函数。
 
 普查 PASS 只允许在具备原始指纹、clean errors、明确隔离标志与有效状态的情况下撤回旧限制性结论；撤回目标是 `runtime_needs_retest`，不是可发布的 `entrypoint_found`。重新发布须通过独立人工审核与发布批准，不能从像素变化推断。
+
+
+### 来源证据保真与分类关系时间戳（PR #12 的独立最小修复）
+
+`evidence_sources.url` 唯一标识来源，`project_evidence` 的主键却包含 `evidence_type`，意味着同一来源 URL 可以支持多条不同类型的证据。`export_seed.py` 现在每 URL 输出证据列表；`db.seed_database` 同时接受历史单项对象与新列表，并拒绝冲突 confidence，不再默默遗漏同源证据。原始来源凭据的真伪不会仅因导入成功得到验证。
+
+分类更新原先采用 `DELETE`+重新插入，却未考虑只变更分类关系而 `projects` 标量不变的情况。现在先比较分类集及 primary/raw 标签，仅在实际变化时更新关系和 `updated_at`，重复导入保持时间戳不变。

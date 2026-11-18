@@ -55,6 +55,9 @@ class ResearchIntegrationTests(unittest.TestCase):
 
     def test_conservative_work_entry_status(self):
         row=self.conn.execute("SELECT entry_path,entry_status FROM research_works WHERE title='Dawnward'").fetchone()
+        self.assertEqual(row["entry_path"],"index.html")
+        self.assertEqual(row["entry_status"],"TREE_PATH_REVIEWED_NOT_EXECUTED")
+        row=self.conn.execute("SELECT entry_path,entry_status FROM research_works WHERE title='Aquila'").fetchone()
         self.assertEqual(row["entry_path"],"rome/index.html")
         self.assertEqual(row["entry_status"],"TREE_PATH_REVIEWED_NOT_EXECUTED")
         row=self.conn.execute("SELECT entry_path FROM research_works WHERE title='SUBLEVEL 07'").fetchone()

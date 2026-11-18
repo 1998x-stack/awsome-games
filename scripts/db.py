@@ -388,9 +388,25 @@ def seed_database(conn: sqlite3.Connection, seed_path: Path = SEED_PATH):
           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
           ON CONFLICT(id) DO UPDATE SET slug=excluded.slug,title=excluded.title,original_title=excluded.original_title,description=excluded.description,content_type=excluded.content_type,model_claim=CASE WHEN projects.model_confidence='community_claim' THEN excluded.model_claim ELSE projects.model_claim END,model_version=CASE WHEN projects.model_confidence='community_claim' THEN excluded.model_version ELSE projects.model_version END,creator=excluded.creator,published_at=excluded.published_at,prompt_status=excluded.prompt_status,updated_at=CASE WHEN projects.slug=excluded.slug AND projects.title=excluded.title AND projects.original_title IS excluded.original_title AND projects.description=excluded.description AND projects.content_type=excluded.content_type AND projects.creator=excluded.creator AND projects.published_at IS excluded.published_at AND projects.prompt_status=excluded.prompt_status AND projects.model_claim=CASE WHEN projects.model_confidence='community_claim' THEN excluded.model_claim ELSE projects.model_claim END AND projects.model_version=CASE WHEN projects.model_confidence='community_claim' THEN excluded.model_version ELSE projects.model_version END THEN projects.updated_at ELSE excluded.updated_at END""",
           (pid,slug,p.get("title", "Untitled"),p.get("title", "Untitled"),p.get("description", ""),cat_info["content_type"],claim,model_version(claim),"community_claim",creator,p.get("publish_date") or None,";".join(p.get("prompt_statuses",[]) or ([p.get("prompt_status")] if p.get("prompt_status") else [])) or "unknown","indexed" if p.get("repos") else "no_repository","external_demo" if p.get("plays") else "not_checked",ts,ts))
-        conn.execute("DELETE FROM project_categories WHERE project_id=?", (pid,))
-        for i, cat_id in enumerate(cat_ids):
-            conn.execute("INSERT OR IGNORE INTO project_categories(project_id,category_id,is_primary,raw_label) VALUES(?,?,?,?)", (pid,cat_id,1 if i==0 else 0,"; ".join(cats_raw)))
+        # The scalar UPSERT above cannot detect category-only changes.
+        # Keep timestamps stable on a repeated identical import, but bump them
+        # when relation membership, primary priority or original labels change.
+        new_categories = [(cid, 1 if i == 0 else 0, "; ".join(cats_raw))
+                          for i, cid in enumerate(cat_ids)]
+        previous_categories = [
+            tuple(row) for row in conn.execute(
+                "SELECT category_id,is_primary,raw_label FROM project_categories "
+                "WHERE project_id=?", (pid,)
+            )
+        ]
+        if sorted(previous_categories) != sorted(new_categories):
+            conn.execute("DELETE FROM project_categories WHERE project_id=?", (pid,))
+            for cid, primary, raw in new_categories:
+                conn.execute(
+                    "INSERT INTO project_categories(project_id,category_id,is_primary,raw_label) "
+                    "VALUES(?,?,?,?)", (pid, cid, primary, raw)
+                )
+            conn.execute("UPDATE projects SET updated_at=? WHERE id=?", (ts, pid))
         repos = p.get("repos") or ([p.get("repo")] if p.get("repo") else [])
         for repo_name in repos:
             meta = parse_repo(repo_name)
@@ -415,12 +431,44 @@ def seed_database(conn: sqlite3.Connection, seed_path: Path = SEED_PATH):
             sid = conn.execute("SELECT id FROM evidence_sources WHERE url=?",(url,)).fetchone()[0]
             # Prefer faithful per-source provenance from the seed; the project-level
             # `evidence` list is only a fallback for hand-authored seeds.
-            mapping = per_source_evidence.get(url) or {}
-            ev_type = mapping.get("evidence_type") or (p.get("evidence") or [p.get("evidence_kind", "community_index")])[0]
-            if ev_type in SYNTHETIC_EVIDENCE_TYPES:
-                continue
-            confidence = mapping.get("confidence") or ("medium" if ev_type in ("repository_documentation", "repository_name_and_files") else "low")
-            conn.execute("INSERT OR IGNORE INTO project_evidence(project_id,evidence_source_id,evidence_type,confidence,observed_at) VALUES(?,?,?,?,?)",(pid,sid,ev_type,confidence,ts))
+            # A URL identifies a source, not a single evidence claim. Legacy
+            # JSONL contains one dict per URL; new exports contain a list.
+            if url in per_source_evidence:
+                rows = per_source_evidence[url]
+                if isinstance(rows, dict):
+                    rows = [rows]
+                if not isinstance(rows, list) or not rows:
+                    raise ValueError("evidence_by_source must contain a nonempty dict/list")
+            else:
+                fallback = p.get("evidence") or [p.get("evidence_kind", "community_index")]
+                if not isinstance(fallback, list) or not all(
+                    isinstance(value, str) and value for value in fallback
+                ):
+                    raise ValueError("Fallback evidence must contain nonempty string types")
+                rows = [{"evidence_type": kind} for kind in fallback]
+            seen_types = {}
+            for mapping in rows:
+                if (not isinstance(mapping, dict) or
+                        not isinstance(mapping.get("evidence_type"), str) or
+                        not mapping["evidence_type"]):
+                    raise ValueError("Invalid per-source evidence type")
+                ev_type = mapping["evidence_type"]
+                if ev_type in SYNTHETIC_EVIDENCE_TYPES:
+                    continue
+                confidence = mapping.get("confidence") or (
+                    "medium" if ev_type in ("repository_documentation",
+                                            "repository_name_and_files") else "low"
+                )
+                if not isinstance(confidence, str) or not confidence:
+                    raise ValueError("Invalid per-source evidence confidence")
+                if ev_type in seen_types and seen_types[ev_type] != confidence:
+                    raise ValueError("Conflicting confidence for identical source/evidence type")
+                seen_types[ev_type] = confidence
+                conn.execute(
+                    "INSERT OR IGNORE INTO project_evidence(project_id,evidence_source_id,"
+                    "evidence_type,confidence,observed_at) VALUES(?,?,?,?,?)",
+                    (pid, sid, ev_type, confidence, ts)
+                )
         count += 1
     conn.commit()
     return count
