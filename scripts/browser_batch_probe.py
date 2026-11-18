@@ -29,10 +29,12 @@ from urllib.parse import quote
 
 from browser_smoke import FRAME_SANDBOX, clean_entry, install_network_policy, serve_static_root
 from browser_gameplay_probe import apply_input, frame_dom_census, frame_fingerprint
+from input_attribution import (INPUT_RESPONSIVE, NOT_ATTRIBUTABLE, NO_OBSERVABLE_RESPONSE,
+                               input_attribution)
 
 HOST_PATH = "/__batch_host__"
-SUB_STATUS = ("BROWSER_LOAD_CHECKED", "INPUT_RESPONSIVE", "NO_OBSERVABLE_RESPONSE",
-              "INCOMPLETE_OR_FAILED", "TIMEOUT_ABORTED")
+SUB_STATUS = ("BROWSER_LOAD_CHECKED", INPUT_RESPONSIVE, NOT_ATTRIBUTABLE,
+              NO_OBSERVABLE_RESPONSE, "INCOMPLETE_OR_FAILED", "TIMEOUT_ABORTED")
 
 
 def build_host(query: dict) -> str:
@@ -79,12 +81,13 @@ def blank_result(entry: str, mode: str) -> dict:
             "console_errors": [], "blocked_requests": [], "blocked_websockets": [],
             "stubbed_cosmetic_requests": [], "failed_requests": [], "http_errors": [],
             "actions": [], "idle_output_changed": False, "input_changed_pixels": False,
-            "input_changed_dom": False, "gameplay_verified": False}
+            "input_changed_dom": False, "idle_dom_changed": False,
+            "gameplay_verified": False, "input_responsive": False}
 
 
 def measure(page, iframe, child, mode: str, idle_ms: int, settle_ms: int) -> dict:
     out = {"actions": [], "idle_output_changed": False, "input_changed_pixels": False,
-           "input_changed_dom": False}
+           "input_changed_dom": False, "idle_dom_changed": False}
     box = iframe.bounding_box() or {"x": 0, "y": 0, "width": 800, "height": 600}
     f1 = frame_fingerprint(page, iframe)
     dom1 = frame_dom_census(child) if child else ""
@@ -99,6 +102,7 @@ def measure(page, iframe, child, mode: str, idle_ms: int, settle_ms: int) -> dic
     dom3 = frame_dom_census(child) if child else ""
     out["input_changed_pixels"] = bool(f2["pixels"] and f3["pixels"] and f2["pixels"] != f3["pixels"])
     out["input_changed_dom"] = bool(dom2 and dom3 and dom2 != dom3)
+    out["idle_dom_changed"] = bool(dom1 and dom2 and dom1 != dom2)
     out["fingerprints"] = {"initial_pixels": f1["pixels"], "idle_pixels": f2["pixels"],
                            "after_input_pixels": f3["pixels"], "initial_dom": dom1,
                            "idle_dom": dom2, "after_input_dom": dom3,
@@ -160,12 +164,14 @@ def run_single(root: Path, item: dict, idle_ms: int, settle_ms: int) -> dict:
                        and not result["console_errors"] and not result["blocked_requests"]
                        and not result["blocked_websockets"] and not result["failed_requests"]
                        and not result["http_errors"])
-            responded = bool(result["input_changed_pixels"] or result["input_changed_dom"])
+            verdict = input_attribution(result)
             if not load_ok:
                 result["status"] = "INCOMPLETE_OR_FAILED"
             elif mode == "gameplay":
-                result["status"] = "INPUT_RESPONSIVE" if responded else "NO_OBSERVABLE_RESPONSE"
-                result["gameplay_verified"] = responded
+                # Same rule as the standalone gameplay probe: a page that repaints on
+                # its own is NOT_ATTRIBUTABLE, not a success.
+                result["status"] = verdict
+                result["input_responsive"] = verdict == INPUT_RESPONSIVE
             else:
                 result["status"] = "BROWSER_LOAD_CHECKED"
             ctx.close()
@@ -262,6 +268,7 @@ def run_batch(root: Path, items: list[dict], out: Path, idle_ms: int, settle_ms:
             "key": item["key"], "entry": item["entry"], "mode": item.get("mode", "load"),
             "status": report["status"],
             "gameplay_verified": bool(report.get("gameplay_verified")),
+            "input_responsive": bool(report.get("input_responsive")),
             "idle_output_changed": bool(report.get("idle_output_changed")),
             "console_errors": len(report.get("console_errors", [])),
             "blocked": len(report.get("blocked_requests", [])),

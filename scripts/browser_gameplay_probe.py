@@ -25,8 +25,13 @@ from pathlib import Path
 from urllib.parse import quote
 
 from browser_smoke import FRAME_SANDBOX, clean_entry, install_network_policy, serve_static_root
+from input_attribution import (INPUT_RESPONSIVE, NOT_ATTRIBUTABLE, NO_OBSERVABLE_RESPONSE,
+                               input_attribution)
 
-STATUSES = ("INPUT_RESPONSIVE", "NO_OBSERVABLE_RESPONSE", "INCOMPLETE_OR_FAILED")
+# The full verdict vocabulary. Kept next to the rule that produces it so a new
+# status cannot be added to the rule and forgotten here.
+STATUSES = (INPUT_RESPONSIVE, NO_OBSERVABLE_RESPONSE, NOT_ATTRIBUTABLE,
+            "INCOMPLETE_OR_FAILED")
 # Keys that almost any browser game uses for movement / action.
 INPUT_KEYS = ("ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft", "Space",
               "KeyW", "KeyD", "KeyS", "KeyA", "Enter")
@@ -108,9 +113,15 @@ def probe(root: Path, entry: str, screenshot: Path | None = None,
         "idle_output_changed": False,
         "input_changed_pixels": False,
         "input_changed_dom": False,
+        "idle_dom_changed": False,
         "fingerprints": {},
         "screenshot": None,
+        # This probe measures ONE thing: did rendered output change after synthetic
+        # input. That is not gameplay verification, and an automated run must not
+        # claim it, so gameplay_verified stays False and the measured fact is
+        # reported separately as input_responsive.
         "gameplay_verified": False,
+        "input_responsive": False,
         "evidence_scope": ("rendered output changed after synthetic pointer/keyboard input; "
                            "does not prove the game is correct, complete or author-owned"),
     }
@@ -166,6 +177,7 @@ def probe(root: Path, entry: str, screenshot: Path | None = None,
             dom3 = frame_dom_census(child) if child else ""
             result["input_changed_pixels"] = bool(f2["pixels"] and f3["pixels"] and f2["pixels"] != f3["pixels"])
             result["input_changed_dom"] = bool(dom2 and dom3 and dom2 != dom3)
+            result["idle_dom_changed"] = bool(dom1 and dom2 and dom1 != dom2)
             result["fingerprints"] = {
                 "initial_pixels": f1["pixels"], "idle_pixels": f2["pixels"], "after_input_pixels": f3["pixels"],
                 "initial_dom": dom1, "idle_dom": dom2, "after_input_dom": dom3,
@@ -182,14 +194,15 @@ def probe(root: Path, entry: str, screenshot: Path | None = None,
                        and not result["console_errors"] and not result["blocked_requests"]
                        and not result["blocked_websockets"] and not result["failed_requests"]
                        and not result["http_errors"])
-            responded = bool(result["input_changed_pixels"] or result["input_changed_dom"])
+            # Pixels changing after input is not by itself evidence of input response:
+            # see scripts/input_attribution.py for why, and for the measured numbers
+            # that forced the distinction.
+            verdict = input_attribution(result)
             if not load_ok:
                 result["status"] = "INCOMPLETE_OR_FAILED"
-            elif responded:
-                result["status"] = "INPUT_RESPONSIVE"
-                result["gameplay_verified"] = True
             else:
-                result["status"] = "NO_OBSERVABLE_RESPONSE"
+                result["status"] = verdict
+                result["input_responsive"] = verdict == INPUT_RESPONSIVE
             ctx.close()
             browser.close()
             browser = None
@@ -217,7 +230,7 @@ def main():
         args.report.parent.mkdir(parents=True, exist_ok=True)
         args.report.write_text(body + "\n", encoding="utf-8")
     print(body)
-    if info["status"] != "INPUT_RESPONSIVE":
+    if info["status"] != INPUT_RESPONSIVE:
         raise SystemExit(1)
 
 

@@ -1,4 +1,6 @@
-# PI Agent 交接报告 · 2026-11-17
+# PI Agent 交接报告 · 2026-11-17 → 2026-11-18
+
+> **最新一轮见文末 `## 10.`（2026-11-18 全量实测）**；第 1–9 节为 2026-11-17 批次，保留原文以便对照。
 
 给下一位 ChatGPT / 维护者阅读。**每个结论都有命令、SQL、代码路径或 GitHub URL 支撑。**
 凡未执行的验证一律写 `NOT_TESTED` / `BLOCKED`，不猜数字。
@@ -318,3 +320,199 @@ live research stats = 1,118 / 907 / 64 / 83 / 12   |   live index stats = 155 / 
 * 详细基线：`docs/LOCAL_BASELINE_2026-11-17.md`
 * 里程碑进度：`docs/IMPLEMENTATION_PLAN.md`
 * 结构化事实：`data/reports/pi-agent-latest.json`
+
+---
+
+## 10. 2026-11-18 全量隔离实测轮次
+
+分支 `feat/deep-build-all-repos`，起点 `0f6ed51`。本轮目标：**把本地已解析出的每一个入口都真正在隔离容器里跑一遍**，
+并让结论可复现、可审计。要求使用 subagents 并行。
+
+### 10.1 结论摘要（含一次自我更正）
+
+| 指标 | 值 |
+|---|---|
+| 已克隆到本地的仓库 | 54（3.4 GB，均在 `.gitignore` 之外，不入库） |
+| 有可测入口的仓库 | 32 |
+| **实测入口** | **123 / 123（0 未测）** |
+| 加载干净（`BROWSER_LOAD_CHECKED`） | 74 |
+| **可归因于输入响应（`INPUT_RESPONSIVE`）** | **4** |
+| 页面自行重绘、输入响应无法分离 | 15 |
+| 明确失败（见 10.8 分类） | 26 |
+| 阻塞驱动、被硬终止（120 秒下依旧可复现） | 3 |
+| `GAMEPLAY_VERIFIED` | **0（刻意）** |
+
+**必须先说清一次更正**：本轮中途我一度把 `INPUT_RESPONSIVE` 报成 **11 条**，
+上一轮则报过 **4 条**。两次都不对。
+
+11 条里 **10 条在空闲基线期间像素就已经在变**，其中 **7 条从加载到结束 DOM 字节完全相同**——
+canvas 动画无论有没有注入输入都会改变像素，那种差异什么也证明不了。
+按修正后的归因规则重判，真正可归因的只有 **4 条**；上一轮报的 4 条里也有 2 条（`the-boondocks-the-woodcrest-files`、`emberdeep`）
+不满足该规则。规则实现在 `scripts/input_attribution.py`，**探针与离线汇总器共用**，
+所以历史报告是用修正规则重判的，而不是重跑浏览器（重跑会换掉证据）。
+
+### 10.2 一个诊断：停顿 4–17 分钟的真正原因
+
+```bash
+docker info --format 'CPUs={{.NCPU}} Mem={{.MemTotal}}'
+# CPUs=2  Mem=4095643648
+```
+
+Docker Desktop 只分给 VM **2 个 CPU / 4 GB**，而容器请求 `--cpus 2`（即整台 VM）。
+我为了看进度而临时起容器、或跑 `docker exec`，都会与正在渲染的 Chromium 抢同一批周期，
+单条耗时从 3.5 秒涨到分钟级。**是轮询拖慢了整批，不是被测页面。**
+这条纪律写进了 `docs/BROWSER_SMOKE.md`：**进度看容器 stdout，不要为看进度再起容器**。
+（同一现象再次复现：一次带每 15 秒轮询的 2 条小测试用了 180 秒才退容器，不轮询的同一测试 30 秒就退出。）
+
+### 10.3 harness 的 4 个真实缺陷，其中 1 个是我自己的回归
+
+| 缺陷 | 后果 | 处理 |
+|---|---|---|
+| `--collect` 被前置的 `--root` 校验拦住 | 报告取不回来 | 调整校验顺序 |
+| `--detach` 仍带 `--rm` | 容器退出即被删，`docker cp` 无对象 | 分离模式剔除 `--rm` |
+| 镜像 `ENTRYPOINT` 是 `python3` | shell 脚本被喂给 Python（SyntaxError） | 批处理覆盖 entrypoint |
+| 清单落在共享路径 | 并行分片互相覆盖清单 | 按 `--name` 分域 |
+
+**第 5 个是我引入的回归，由 subagent 如实报出**：我另写了一个 shell 驱动 `batch_loop.sh` 替换既有的
+Python 驱动，理由（"Python 杀不掉阻塞的 Python"）是**错的**——既有 `run_batch` 早就把监督权交给外部
+`timeout -s KILL`，并做了 `start_new_session` + `killpg`、子进程输出重定向到文件、超时写 `TIMEOUT_ABORTED`。
+我的替代版本在兜底调用里漏传了必填的 `--root`，又把 stderr 丢进 `/dev/null`，于是
+**5 条超时报告被静默吞掉**（109/114）。子代理通过"报告数 ≠ 清单数"发现并指出。
+处理：**删掉我的驱动，复用既有实现**（更少的代码、没有回归），并补上真正需要的能力
+（`--detach` / `--collect` / 按名分域清单）。随后**用故意阻塞的 fixture 实测了超时路径**——
+这正是一开始就该做的验证，也正是它缺席才让 bug 藏住。
+
+### 10.4 另外两处诚实性修正
+
+* **`gameplay_verified` 与 `input_responsive` 语义分家。** 汇总器原先把"探针对合成输入有反应"直接计入
+  `gameplay_verified`；而 `import_browser_report.py` 强制自报报告必须写 `gameplay_verified: False`，
+  两处同名不同义。现在探针一律写 `False`，汇总产物 `counts.gameplay_verified` **恒为 0**（有回归测试守住），
+  机器能做出的最强主张是 `counts.input_responsive`。
+* **分类器漏掉一整类沙箱不兼容。** `circular-tic-tac-toe` 落在 `OTHER`，原因是
+  `Failed to read the 'serviceWorker' property ... lacks the 'allow-same-origin' flag`——
+  与 `shooter.html` 的 `localStorage` **同一根因**。已并入 `SANDBOX_OPAQUE_ORIGIN_BREAKS_OWN_SCRIPT`
+  （该类别涵盖"页面自身使用同源限定 API"）。同时把 `Page crashed` / `Target crashed` 从
+  `DRIVER_FLAKE_OR_TIMEOUT` 拆出为 `RENDERER_CRASHED_ENVIRONMENT_LIMIT`——在本机 2 CPU / 4 GB 上，
+  渲染器崩溃是**环境上限**，不是产物属性。
+
+### 10.5 `needs_review` 19 → 0
+
+* **11 个入口路径**用页面 `<title>` 与目录标题**逐字对得上**才写入 `config/project_overrides.json`
+  （例：`XDracam/spaceappschallenge2026/game/index.html` 的 title 就是 `T-Minus`；
+  `ONE_PROMPT_WORLDS` 的 13 个游戏按其标题精确映射到 `gameN/`，注意其根 `index.html` 只是菜单）。
+* **7 个根本不是浏览器作品**：Unity（`Assets/`+`Builds/`+`PLAY.bat`）、Godot（`project.godot`）、
+  Rust（`Cargo.toml`）、C + `Makefile`。这些仓库**没有任何 HTML**，留在 `needs_review` 等于假装问题未查清。
+  新增声明式状态 `not_browser_based`，每条必须带 `note` 说明证据。
+* **1 个是打包器外壳**：`t-minus` 引用 `%BASE_URL%` 与 `/src/main.tsx`，按证据改判 `requires_build`
+  （没有为了"多测一个"把它当静态入口）。
+* 声明式状态**只允许** `DECLARED_REVIEWED_STATUSES` 中的值，且**不能声明运行时结果**——有回归测试守住。
+* 顺带修掉一个真实误判：`aaron-sulbaran/jester` 曾因**缺三个 favicon** 被判 `missing_assets`。
+  运行时探针本就把图标/字体 stub 成空响应，两侧标准已对齐；实测真实原因是它自身的 TS module
+  在必需沙箱下被 CORS 拒绝（`SANDBOX_OPAQUE_ORIGIN_BREAKS_OWN_SCRIPT`）。
+  同一规则下 `bhoult/phone-games` 缺的 `engine.js`（功能性依赖）仍被正确报出。
+
+### 10.6 新增：把实测结论写进权威库的写入者
+
+在此之前，库里的 `sandbox_incompatible` / `runtime_*` 行**没有任何脚本能产生**，
+只有 `collect_repositories.py` 的 `RUNTIME_REVIEWED_STATUSES` 在"保留"它们。
+一个任何脚本都产生不了的结论是不可审计的，所以补上 `scripts/apply_survey_to_catalog.py`，按构造 fail-closed：
+
+* 只写限制性状态，**没有任何路径能让作品因此变可发布**；
+* 拒跑不合格证据文件（缺 `captured_at`、缺隔离配置、**作出结论的条目缺指纹**）；手写一份"普查"改不动库；
+* `PAGE_BLOCKED_DRIVER` 是特例：它的证据恰恰是"没有指纹"，因此改为要求必须记录硬超时原因；
+* **绝不弱化既有结论**；
+* 补上了**基于证据的撤回**：一份同样有证据的 PASS 可以把陈旧的限制性状态撤回到入口态
+  （缺 `iframe_fingerprint`/未确认 iframe 隔离的 PASS 不允许撤回）；
+* 每行记下证据文件 sha256。
+
+干跑已暴露一个**需要人工判断的真冲突**：`ironvale` 库里是上一轮实测的 `runtime_no_interaction`
+（"测过，无反应"），而本轮重测结果是 `runtime_driver_timeout`（"这次测不出来"）。
+守卫**拒绝**用"测不出来"抹掉"已经测过"，并把冲突打印出来——保留已测量的结论，交由人工判断。
+
+### 10.7 全量结果（123 个入口）
+
+```
+78  PASS                                            (74 BROWSER_LOAD_CHECKED + 4 INPUT_RESPONSIVE)
+15  INPUT_RESPONSE_NOT_ATTRIBUTABLE                   页面持续自行重绘，输入响应无法分离
+10  EXTERNAL_CDN_REQUIRED                             依赖外部 CDN 上的真实 JS（依赖分类，非缺陷）
+ 9  SANDBOX_OPAQUE_ORIGIN_BREAKS_OWN_SCRIPT           必需沙箱给帧不透明源：自身 ES module 被判 CORS，
+                                                     或读取 localStorage / serviceWorker 时抛错
+ 3  PAGE_BLOCKED_DRIVER                               阻塞驱动，外部 timeout -s KILL 终止（60 与 120 秒均复现）
+ 2  OPTIONAL_DEVICE_SENSOR_DENIED                     accelerometer / fullscreen 策略拒绝
+ 3  DRIVER_FLAKE_OR_TIMEOUT                           iframe 可见但 bounding_box/可见性定位超时等驱动侧问题
+ 1  RENDERER_CRASHED_ENVIRONMENT_LIMIT                渲染器崩溃（本机 2 CPU / 4 GB 的环境上限，2 GB 内存下复现）
+ 1  THIRD_PARTY_ANALYTICS_BLOCKED                     加载第三方分析脚本
+ 1  NO_OBSERVABLE_RESPONSE                            能加载，输入后无任何可观测变化
+```
+
+**关于 `SANDBOX_OPAQUE_ORIGIN_BREAKS_OWN_SCRIPT`（9 条）必须加上限定**：这不是"这 9 个游戏是坏的"。
+它说的是"在我们**必需**的沙箱下（刻意不给 `allow-same-origin`）帧成为不透明源，
+页面自身的 ES module 因此被判 CORS 失败"。在普通 HTTP 源下它们很可能正常。
+把这类产物变可玩只有一条路——**放宽沙箱**，而那是本项目明确不做的事（见 `AGENTS.md`）。
+所以这是"与我们安全要求的兼容性"结论，不是产物缺陷结论；它们不会被发布。
+
+**4 条可归因输入响应的原始证据**（加载干净、0 控制台错误、0 阻断请求、iframe 隔离为真）：
+
+| 条目 | 仓库 | 归因依据 |
+|---|---|---|
+| `soccer-time-dev-5-1` | Time-dev-alt/Fable-5.1-Games | DOM 在空闲期字节不变，注入输入后变化 |
+| `neon-runner` | Ilias-AK/NewGameFromFable5.2 | 同上 |
+| `sternenjager` | oldzitterhand/sternenjaeger | 同上 |
+| `world-1-1` | sorrycc/fable-arcade | 像素在空闲期稳定，注入输入后变化（DOM 未变） |
+
+**线上可玩数不变，仍为 1**：只有 `Time-dev-alt/Fable-5.1-Games/Soccer.html` 同时满足
+"仓库在发布白名单内 + 许可证已核对"。**新增的 3 个可归因作品不会自动上线**——
+本 agent 不修改 `config/publication_approvals.json`。
+
+### 10.8 验证证据
+
+```
+数据一致性   check_catalog.py                          problems: []                    PASS
+             build_catalog.py --check                  integrity ok / FK 0             PASS
+单测         test_hardening + test_catalog             52 passed                       PASS
+             test_isolation_harness                    37 passed                       PASS
+静态         compileall / bash -n / node --check       ok                              PASS
+容器自测     故意阻塞 fixture + 正常 fixture            TIMEOUT_ABORTED + LOAD_CHECKED  PASS
+             （修复前该路径静默丢失报告，修复后 14/14 齐全；重试批 8/8 齐全）
+```
+
+本轮新增回归测试：声明式状态与离线重分类 6、装饰性资源 4、输入归因 9、分类覆盖 5、
+应用器（含撤回与证据规则）8。
+
+### 10.9 仍然没有做到的（不粉饰）
+
+* **7 个入口在本机环境内测不出结论**（3 个阻塞驱动、3 个驱动侧定位超时、1 个渲染器崩溃）。
+  它们**没有**被写成对产物的判断：只记 `runtime_driver_timeout` 或不记状态。重试结果见 10.10。
+* **仍然没有 `GAMEPLAY_VERIFIED`**，且这是刻意的：机器能做出的最强主张只是可归因的输入响应。
+* **仍未实现逐游戏的行为断言**（点击 X 应导致状态 Y）。
+* **10 个 `missing_assets` / 9 个 `requires_build`** 在静态条件下确实跑不了（缺功能性资源或需构建），
+  这不是待办积压，而是结论。
+* **32 个研究候选仓库**仍未做 M2 代码级审计后才克隆——这是刻意的隔离，不是遗漏。
+* **5 个只有外链演示的作品**（CROSSTOWN、Oil Paint、Starry Nightrider、Tennis、What the Water Keeps）
+  没有仓库，需要另做"真实 URL 测试器"，本轮未做。
+* `data/reports/repo-survey-2026-11-17.json` **按原文保留**（当时的结论是当时的证据），
+  但其中的 `gameplay_verified: 3` 用的是已被证明错误的归因规则；新文件
+  `data/reports/repo-survey-2026-11-18.json` 为修正后的版本，`gameplay_verified` 恒为 0。
+
+### 10.10 对未能测出的 8 个入口各重试一次（结果：只转换了 1 个）
+
+配置：`--memory 2g`、`--per-entry-timeout 120`（原为 1 GB / 60 秒）。TOTAL：
+`BROWSER_LOAD_CHECKED 1 | INCOMPLETE_OR_FAILED 4 | TIMEOUT_ABORTED 3`，8/8 报告齐全。
+
+| 条目 | 原结果 | 重试结果 | 结论 |
+|---|---|---|---|
+| `aurora-over-the-fjord` | `TIMEOUT_ABORTED` | **`BROWSER_LOAD_CHECKED`** | **唯一转换**：它只是慢/重，60 秒不够，不是坏的 |
+| `emberdeep` | `TIMEOUT_ABORTED` | `TIMEOUT_ABORTED` | 阻塞可复现，**日志 0 字节**（子进程完全无输出） |
+| `ironvale` | `TIMEOUT_ABORTED` | `TIMEOUT_ABORTED` | 同上；且库里保留上一轮实测的 `runtime_no_interaction`（见 10.6 的冲突） |
+| `mothlight-vesper-9` | `TIMEOUT_ABORTED` | `TIMEOUT_ABORTED` | 同上 |
+| `lichen-on-slate` | `DRIVER_FLAKE` | `INCOMPLETE_OR_FAILED` | `Locator.wait_for: Timeout 30000ms` 等 iframe 可见，iframe 始终不可见 |
+| `misremember` | `DRIVER_FLAKE`（崩溃） | `INCOMPLETE_OR_FAILED`（仍 `Page crashed`） | 2 GB 下仍崩溃 → 不是 1 GB 的问题，是本机渲染环境上限 |
+| `saltline` | `DRIVER_FLAKE`（崩溃） | `INCOMPLETE_OR_FAILED` | iframe **可见**，但 `bounding_box` 15 秒超时 → 驱动侧限制 |
+| `tidebell` | `DRIVER_FLAKE` | `INCOMPLETE_OR_FAILED` | 同 `saltline` |
+
+因此最终"环境/驱动侧阻碍"的条目是 **7 个**（3 阻塞 + 3 定位超时 + 1 崩溃），不是 8 个。
+**`--per-entry-timeout` 没有为了凑结果而被下调，超时条目也没有重试到出现不同答案为止**：
+第二次得到相同结论本身就是可报告的结果。
+
+被阻塞条目的 `.log` 是空的（0 字节），这点值得记下：对这类条目**唯一存在的证据就是那条硬超时记录**，
+因此写入器对它们的证据要求是"必须记录硬超时原因"，而不是"必须有指纹"（见 10.6）。
