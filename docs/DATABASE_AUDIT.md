@@ -74,3 +74,8 @@ The actual GitHub Actions `Validate catalog` job ([run 44235214997](https://gith
 | `research_runtime_evidence` / `research_review_history` | 0 / 0 |
 
 The schema fingerprint was `21fdf1d9dbcb2262ffdbbb77b7120efcc622b70835a6cfbaaa1993bbcfca0cd0`. The 26th table is optional `research_review_history`, present with zero records. This is evidence of **database structural consistency**, not of game playability or third-party licenses. The source code for this PR was also exercised by six new isolated regression tests.
+
+
+## 实施中的 v1 Migration 机制
+
+参见 [SCHEMA_MIGRATIONS.md](SCHEMA_MIGRATIONS.md)。`migrate_database.py` 将已验证的 26 表 v0 结构登记为迁移版本 1，先创建 WAL 安全的完整备份，再在事务中执行，仅新增 `schema_migrations` 并设置 `user_version=1`；全部既有数据行的逻辑 SHA-256 必须保持不变。CI 只在临时副本验收升级，已提交的 `data/catalog.sqlite` 保持 v0，未来实际迁移须经独立审核。
