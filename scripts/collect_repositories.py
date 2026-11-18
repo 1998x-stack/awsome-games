@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse, hashlib, html.parser, json, mimetypes, os, re, shutil, subprocess, sys, tempfile, time
 from datetime import datetime, timezone
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse, urlsplit
 import requests
 from db import ROOT, connect, create_run, finish_run, log_error, now
 
@@ -33,6 +33,16 @@ RUNTIME_REVIEWED_STATUSES = {
     'runtime_no_interaction',          # loaded but never reacted to input
     'runtime_driver_timeout',          # blocked the driver; hard-killed
     'runtime_needs_retest',            # measurement was unreliable
+    'runtime_input_not_attributable',  # repaints on its own; input response not separable
+}
+
+# Statuses an editor may assert in config/project_overrides.json. They describe what
+# kind of program the work is (a settled fact about the source), not a runtime
+# measurement, so a refresh must preserve them rather than re-derive them. Each such
+# override is required to carry a note naming the evidence.
+DECLARED_REVIEWED_STATUSES = {
+    'not_browser_based',   # native engine/binary: no browser entrypoint exists
+    'requires_build',      # a build step (bundler/dev server) must run first
 }
 
 
@@ -166,23 +176,46 @@ class _AssetReferences(html.parser.HTMLParser):
     def handle_starttag(self,tag,attrs):
         d=dict(attrs)
         if tag in ('script','img','audio','video','source','iframe') and d.get('src'):
-            self.urls.append(d['src'])
+            self.urls.append((tag,d,d['src']))
         if tag=='link' and d.get('href'):
-            self.urls.append(d['href'])
+            self.urls.append((tag,d,d['href']))
+
+
+# References that cannot stop a game from running, and that the isolated runtime
+# probe already stubs with a local empty response. Treating them as missing assets
+# produced false "missing_assets" verdicts for otherwise complete games.
+COSMETIC_LINK_RELS={'icon','shortcut icon','apple-touch-icon','apple-touch-icon-precomposed','mask-icon','manifest'}
+COSMETIC_NAME_PREFIXES=('favicon','apple-touch-icon','android-chrome','mstile')
+COSMETIC_SUFFIXES=('.ico','.woff','.woff2','.ttf','.otf','.eot')
+
+
+def is_cosmetic_asset(tag,attrs,ref):
+    """True for icons, web-app manifests and font files: presentational, non-functional."""
+    if tag=='link':
+        rel=(attrs.get('rel') or '').lower().strip()
+        if rel in COSMETIC_LINK_RELS: return True
+    name=urlsplit(ref).path.rsplit('/',1)[-1].lower()
+    if name.startswith(COSMETIC_NAME_PREFIXES): return True
+    return name.endswith(COSMETIC_SUFFIXES)
 
 
 def missing_static_assets(repo_dir:Path, html_path:str):
-    """Best-effort report for static relative resources; does not run third-party code."""
+    """Best-effort report for static relative resources; does not run third-party code.
+
+    Only functional dependencies are reported. Icons, manifests and web fonts are
+    ignored because the isolated runtime probe stubs them, so their absence cannot
+    be what makes an entrypoint fail.
+    """
     path=repo_dir/html_path
     parser=_AssetReferences()
     try: parser.feed(path.read_text(encoding='utf-8',errors='replace'))
     except OSError: return ['unreadable_entrypoint']
-    from urllib.parse import unquote,urlsplit
     missing=[]
-    for ref in parser.urls:
+    for tag,attrs,ref in parser.urls:
         if not ref or ref.startswith(('#','//')): continue
         url=urlsplit(ref)
         if url.scheme or url.netloc: continue
+        if is_cosmetic_asset(tag,attrs,ref): continue
         if ref.startswith('/'):
             missing.append('root-relative:'+ref[:120]); continue
         raw=unquote(url.path)
@@ -240,6 +273,83 @@ def choose_entry(project, html_paths, project_count):
     return '', 'ambiguous_html_entrypoints'
 
 
+def classify_entrypoints(conn, repo_row, dest, files):
+    """Map each linked work to a local entrypoint, honoring reviewed decisions.
+
+    Split out of process_repo so the same mapping can be re-applied to an already
+    collected snapshot (--reclassify) without touching the network or the filesystem.
+    Returns the selected (project_id, entry, game_path, confidence, status, note) rows.
+    """
+    full=repo_row['full_name']
+    mappings=conn.execute('''SELECT pr.project_id,pr.entry_path,pr.game_path,pr.entry_confidence,pr.playable_status,pr.note,p.slug,p.title,p.id FROM project_repositories pr JOIN projects p ON p.id=pr.project_id WHERE pr.repository_id=?''',(repo_row['id'],)).fetchall()
+    html_paths=[f['path'] for f in files if f['extension'] in ('.html','.htm')]
+    selected=[]; mapping_count=len(mappings)
+    for m in mappings:
+        override=OVERRIDES.get(m['id']) or OVERRIDES.get(m['slug']) or {}
+        if m['playable_status'] in RUNTIME_REVIEWED_STATUSES:
+            # Preserve the runtime finding and its evidence note verbatim.
+            selected.append((m['project_id'],m['entry_path'],m['game_path'],m['entry_confidence'],m['playable_status'],m['note']))
+            continue
+        declared=override.get('playable_status')
+        if declared in DECLARED_REVIEWED_STATUSES:
+            # An editor has settled what this work is; do not score HTML paths for it.
+            selected.append((m['project_id'],'','','declared_review',declared,override.get('note','')))
+            continue
+        project={'id':m['project_id'],'slug':m['slug'],'title':m['title'],'entry_path':m['entry_path']}
+        entry,confidence=choose_entry(project,html_paths,mapping_count)
+        missing=missing_static_assets(dest,entry) if entry else []
+        if entry and not missing:
+            game_path=(Path('games')/'_repos'/repo_dir_name(full)/entry).as_posix()
+            selected.append((m['project_id'],entry,game_path,confidence,'entrypoint_found',''))
+        else:
+            status='missing_assets' if missing else 'requires_build' if any(x in [f['path'] for f in files] for x in ('package.json','vite.config.js','vite.config.ts')) else 'needs_review'
+            selected.append((m['project_id'],entry if missing else '','',confidence,status, json.dumps(missing,ensure_ascii=False)[:2000] if missing else ''))
+    for pid,entry,game_path,confidence,status,note in selected:
+        conn.execute('UPDATE project_repositories SET entry_path=?,game_path=?,entry_confidence=?,playable_status=?,note=? WHERE project_id=? AND repository_id=?',
+                     (entry,game_path,confidence,status,note,pid,repo_row['id']))
+    # Aggregate across all linked repositories: a failed mirror must not hide a
+    # separately imported and usable original source.
+    for m in mappings:
+        pid=m['project_id']
+        statuses=[x[0] for x in conn.execute('SELECT playable_status FROM project_repositories WHERE project_id=?',(pid,))]
+        best=('smoke_test_passed' if 'smoke_test_passed' in statuses else
+              'entrypoint_found' if 'entrypoint_found' in statuses else
+              'sandbox_incompatible' if 'sandbox_incompatible' in statuses else
+              next((x for x in ('runtime_requires_network', 'runtime_third_party_beacon',
+                                'runtime_optional_sensor_denied', 'runtime_input_not_attributable',
+                                'runtime_no_interaction', 'runtime_driver_timeout',
+                                'runtime_needs_retest', 'runtime_verification_failed'
+                                ) if x in statuses), '') or
+              'missing_assets' if 'missing_assets' in statuses else
+              'requires_build' if 'requires_build' in statuses else
+              'not_browser_based' if 'not_browser_based' in statuses else 'needs_review')
+        conn.execute('UPDATE projects SET source_status=?,playable_status=?,updated_at=? WHERE id=?',('cloned',best,now(),pid))
+    return selected
+
+
+def reclassify_repo(conn, repo_row):
+    """Re-apply the entrypoint mapping to an existing local snapshot, offline.
+
+    Used after config/project_overrides.json changes so an auditable correction does
+    not require re-cloning the repository. Reads the recorded file list, so it neither
+    re-hashes 3+ GB of sources nor touches the network.
+    """
+    clone_path=repo_row['clone_path'] or ''
+    dest=ROOT/clone_path
+    if not clone_path or not dest.is_dir():
+        return {'repo':repo_row['full_name'],'status':'skipped','reason':'no local snapshot'}
+    files=[{'path':r['relative_path'],'extension':r['extension'],'mime':r['mime_type'],
+            'size':r['size_bytes'],'sha256':r['sha256']}
+           for r in conn.execute('SELECT relative_path,extension,mime_type,size_bytes,sha256 FROM repository_files WHERE repository_id=?',(repo_row['id'],))]
+    if not files:
+        return {'repo':repo_row['full_name'],'status':'skipped','reason':'no recorded files'}
+    selected=classify_entrypoints(conn,repo_row,dest,files)
+    conn.commit()
+    return {'repo':repo_row['full_name'],'status':'reclassified','files':len(files),
+            'selected_entrypoints':sum(1 for x in selected if x[4]=='entrypoint_found'),
+            'statuses':sorted({x[4] for x in selected})}
+
+
 def process_repo(conn, run_id, repo_row, session, force, skip_api, max_file_bytes, max_total_bytes):
     full=repo_row['full_name']
     snapshot=None
@@ -263,48 +373,13 @@ def process_repo(conn, run_id, repo_row, session, force, skip_api, max_file_byte
         for f in files:
             conn.execute('INSERT INTO repository_files(repository_id,relative_path,extension,mime_type,size_bytes,sha256,is_html_entry,copied) VALUES(?,?,?,?,?,?,?,1)',
               (repo_row['id'],f['path'],f['extension'],f['mime'],f['size'],f['sha256'],int(f['extension'] in ('.html','.htm'))))
-        mappings=conn.execute('''SELECT pr.project_id,pr.entry_path,pr.game_path,pr.entry_confidence,pr.playable_status,pr.note,p.slug,p.title,p.id FROM project_repositories pr JOIN projects p ON p.id=pr.project_id WHERE pr.repository_id=?''',(repo_row['id'],)).fetchall()
-        html_paths=[f['path'] for f in files if f['extension'] in ('.html','.htm')]
-        selected=[]; mapping_count=len(mappings)
-        for m in mappings:
-            if m['playable_status'] in RUNTIME_REVIEWED_STATUSES:
-                # Preserve the runtime finding and its evidence note verbatim.
-                selected.append((m['project_id'],m['entry_path'],m['game_path'],m['entry_confidence'],m['playable_status'],m['note']))
-                continue
-            project={'id':m['project_id'],'slug':m['slug'],'title':m['title'],'entry_path':m['entry_path']}
-            entry,confidence=choose_entry(project,html_paths,mapping_count)
-            missing=missing_static_assets(dest,entry) if entry else []
-            if entry and not missing:
-                game_path=(Path('games')/'_repos'/repo_dir_name(full)/entry).as_posix()
-                status='entrypoint_found'
-                selected.append((m['project_id'],entry,game_path,confidence,status, ''))
-            else:
-                status='missing_assets' if missing else 'requires_build' if any(x in [f['path'] for f in files] for x in ('package.json','vite.config.js','vite.config.ts')) else 'needs_review'
-                selected.append((m['project_id'],entry if missing else '', '',confidence,status, json.dumps(missing,ensure_ascii=False)[:2000] if missing else ''))
-        for pid,entry,game_path,confidence,status,note in selected:
-            conn.execute('UPDATE project_repositories SET entry_path=?,game_path=?,entry_confidence=?,playable_status=?,note=? WHERE project_id=? AND repository_id=?',
-                         (entry,game_path,confidence,status,note,pid,repo_row['id']))
-        # Aggregate across all linked repositories: a failed mirror must not hide a
-        # separately imported and usable original source.
-        for m in mappings:
-            pid=m['project_id']
-            statuses=[x[0] for x in conn.execute('SELECT playable_status FROM project_repositories WHERE project_id=?',(pid,))]
-            best=('smoke_test_passed' if 'smoke_test_passed' in statuses else
-                  'entrypoint_found' if 'entrypoint_found' in statuses else
-                  'sandbox_incompatible' if 'sandbox_incompatible' in statuses else
-                  next((x for x in ('runtime_requires_network', 'runtime_third_party_beacon',
-                                    'runtime_optional_sensor_denied', 'runtime_no_interaction',
-                                    'runtime_driver_timeout', 'runtime_needs_retest',
-                                    'runtime_verification_failed') if x in statuses), '') or
-                  'missing_assets' if 'missing_assets' in statuses else
-                  'requires_build' if 'requires_build' in statuses else 'needs_review')
-            conn.execute('UPDATE projects SET source_status=?,playable_status=?,updated_at=? WHERE id=?',('cloned',best,now(),pid))
+        selected=classify_entrypoints(conn,repo_row,dest,files)
         conn.commit()
         database_committed=True
         if restore_point and restore_point.exists():
             try: shutil.rmtree(restore_point)
             except OSError: pass  # Metadata already committed; do not undo a good snapshot.
-        return {'repo':full,'status':'cloned','commit':sha,'files':len(files),'html_files':len(html_paths),'bytes':total,'selected_entrypoints':sum(1 for x in selected if x[4]=='entrypoint_found'),'skipped':skipped}
+        return {'repo':full,'status':'cloned','commit':sha,'files':len(files),'html_files':sum(1 for f in files if f['extension'] in ('.html','.htm')),'bytes':total,'selected_entrypoints':sum(1 for x in selected if x[4]=='entrypoint_found'),'skipped':skipped}
     except Exception as exc:
         # Never commit partially written repository_files or project entry mappings.
         conn.rollback()
@@ -333,6 +408,7 @@ def main():
     ap.add_argument('--limit',type=int,default=0,help='Limit repositories for a smoke test')
     ap.add_argument('--force',action='store_true',help='Delete cached clones and clone again')
     ap.add_argument('--dry-run',action='store_true',help='List the repositories without cloning')
+    ap.add_argument('--reclassify',action='store_true',help='Re-apply entrypoint mapping to existing local snapshots; no network, no cloning')
     ap.add_argument('--skip-api',action='store_true',help='Skip GitHub REST metadata calls; still uses git')
     ap.add_argument('--max-file-mb',type=int,default=80)
     ap.add_argument('--max-total-mb',type=int,default=800)
@@ -352,6 +428,19 @@ def main():
     if args.dry_run:
         for r in rows: print(r['full_name'],r['repo_role'],r['clone_status'])
         finish_run(conn,run_id,'dry_run',repositories_seen=len(rows),notes='No network or filesystem changes made')
+        return
+    if args.reclassify:
+        # Applying a reviewed correction must not require re-cloning: the snapshots and
+        # their recorded file lists are already on disk.
+        results=[reclassify_repo(conn,row) for row in rows]
+        for r in results: print(json.dumps(r,ensure_ascii=False))
+        done=sum(x['status']=='reclassified' for x in results)
+        playable=conn.execute("SELECT COUNT(DISTINCT project_id) FROM project_repositories WHERE playable_status='entrypoint_found'").fetchone()[0]
+        finish_run(conn,run_id,'success',repositories_seen=len(rows),repositories_cloned=0,games_playable=playable,
+                   notes=f'{done} repositories reclassified from recorded file lists; no clone, no network')
+        conn.close()
+        (ROOT/'data/collection_report.json').write_text(json.dumps({'generated_at':now(),'mode':'reclassify','results':results,'repositories_selected':len(rows),'cloned':0,'errors':0,'projects_with_entrypoint':playable},ensure_ascii=False,indent=2),encoding='utf-8')
+        print(f'\nFinished: {done}/{len(rows)} reclassified offline; {playable} projects have HTML entrypoints.')
         return
     session=requests.Session(); session.headers.update({'User-Agent':'1998x-stack-awsome-games/1.0','Accept':'application/vnd.github+json'})
     if os.getenv('GITHUB_TOKEN'): session.headers['Authorization']='Bearer '+os.environ['GITHUB_TOKEN']

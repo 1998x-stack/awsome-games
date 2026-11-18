@@ -64,6 +64,43 @@ Official API: https://playwright.dev/python/docs/api/class-browsercontext#browse
 自报浏览器报告无法被冒用：`scripts/import_browser_report.py` 只接受与 `research_works.entry_path`（已人工审阅的入口）完全一致的 staged 文件，并锁定 40 位 commit SHA。用自编 fixture 去冒领真实 work_id 会被拒绝，`research_runtime_evidence` 保持 0 行。
 
 
+## 批量实测：为什么必须分离运行（2026-11-17 实测教训）
+
+全量普查曾经出现"连续 3–4 个入口很快、随后停顿 4–17 分钟"的锯齿。根因不是被测页面：
+
+```bash
+docker info --format 'CPUs={{.NCPU}} Mem={{.MemTotal}}'
+# CPUs=2  Mem=4095643648      ← Docker Desktop 只分到 2 个 CPU / 4 GB
+```
+
+容器本身请求 `--cpus 2`，即整个 VM。此时**任何**并行的 `docker run`（例如为了看进度而临时起一个容器）
+或 `docker exec` 都会与正在渲染的 Chromium 抢同一批周期，把单条耗时从 3.5 秒推到分钟级。
+所以这条流水线的纪律是：**不要轮询、不要 exec、不要手写 docker 命令**。
+
+    # 1) 分离启动（进度写到容器 stdout，snapshot 在命名卷里）
+    SMOKE_VOLUME=ag-shard1-vol bash scripts/isolation/run_isolated_smoke.sh \
+      --mode batch --detach --name ag-shard1 \
+      --root games --manifest .cache/shards/shard1/manifest.tsv \
+      --out .cache/shards/shard1/reports --per-entry-timeout 60
+
+    # 2) 等待：每 60 秒最多一次，只看最后 3 行
+    docker logs --tail 3 ag-shard1      # 输出 OK [n/57] <key> … DONE total=57 ok=.. aborted=..
+
+    # 3) 取回报告并删除容器（释放 CPU 给别的分片）
+    SMOKE_VOLUME=ag-shard1-vol bash scripts/isolation/run_isolated_smoke.sh \
+      --mode batch --collect --name ag-shard1 --out .cache/shards/shard1/reports
+
+要点：
+
+* in-container 驱动 `scripts/isolation/batch_loop.sh` 是**外层**监督者：它用 `timeout -s KILL` 包住每条入口，
+  所以 Python 永远不需要去杀 Python（页面可以同步阻塞 `evaluate`，Python 侧等待无法中断）。
+* `--detach` 会刻意**去掉 `--rm`**：容器必须活过自己的退出，否则 `--collect` 无从复制报告。
+* 入口清单与报告目录都按 `--name` 分域（`.cache/isolation-manifest-<name>.tsv`、独立卷），
+  并行分片不会互相覆盖。
+* 容器 stdout 就是进度流，所以不必再起第 3 个容器去看进度——这正是最初拖慢整批的代价。
+* 分片数要匹配 VM 的 CPU 数：2 个 CPU 就 2 个分片各 `--cpus 1`，超过只会互相挤。
+
+
 
 ## 交互实测与依赖分级（2026-11-17 新增）
 

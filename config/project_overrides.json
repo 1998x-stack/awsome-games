@@ -1,4 +1,81 @@
 {
-  "_comment": "Optional per-project corrections. Key by stable project id or slug. entry_path is repository-relative. route is appended to the game URL when required.",
-  "projects": {}
+  "_comment": "Optional per-project corrections, keyed by stable project id or slug. entry_path is repository-relative. playable_status may only be set to a value in DECLARED_REVIEWED_STATUSES (scripts/collect_repositories.py) and must carry a note with the evidence.",
+  "projects": {
+    "t-minus": {
+      "playable_status": "requires_build",
+      "note": "XDracam/spaceappschallenge2026: game/index.html is a bundler shell - it references \"%BASE_URL%favicon.svg\" / \"%BASE_URL%fonts/fonts.css\" and \"root-relative:/src/main.tsx\", so the game needs a build step rather than being served as a static page."
+    },
+    "jester": {
+      "entry_path": "app/index.html",
+      "note": "aaron-sulbaran/jester: app/index.html <title> is \"Jester\" (the *-lab.html pages are debug tools)."
+    },
+    "rufus-crush": {
+      "entry_path": "rufus-crush/web/index.html",
+      "note": "bhoult/phone-games: rufus-crush/web/index.html <title> is \"Rufus Crush\"."
+    },
+    "fab_76903bc995f6e5": {
+      "entry_path": "game/index.html",
+      "note": "ONE_PROMPT_WORLDS game/index.html <title> is \"ぽん、と森は灯る\"."
+    },
+    "fab_415c7ee3e33f5b": {
+      "entry_path": "game2/index.html",
+      "note": "ONE_PROMPT_WORLDS game2/index.html <title> is \"ひとつぶ庭園\"."
+    },
+    "emberdeep-bd6d2": {
+      "entry_path": "game3/index.html",
+      "note": "ONE_PROMPT_WORLDS game3/index.html <title> is \"EMBERDEEP ― 燈守りの坑道\"."
+    },
+    "lumen-reel": {
+      "entry_path": "game4/index.html",
+      "note": "ONE_PROMPT_WORLDS game4/index.html <title> is \"LUMEN REEL\"."
+    },
+    "reel-delve": {
+      "entry_path": "game5/index.html",
+      "note": "ONE_PROMPT_WORLDS game5/index.html <title> is \"REEL DELVE\"."
+    },
+    "fab_28f02b2d0a570f": {
+      "entry_path": "game6/index.html",
+      "note": "ONE_PROMPT_WORLDS game6/index.html <title> is \"うしろのハニワ\"."
+    },
+    "fab_8224bf359617c2": {
+      "entry_path": "game7/index.html",
+      "note": "ONE_PROMPT_WORLDS game7/index.html <title> is \"切りもどし\"."
+    },
+    "fab_8d6dc2c1311f82": {
+      "entry_path": "game8/index.html",
+      "note": "ONE_PROMPT_WORLDS game8/index.html <title> is \"ひつじが いっぴき\"."
+    },
+    "earthfm-listening-game": {
+      "playable_status": "requires_build",
+      "note": "Aarosunn/SpaceApps: EarthFM/ is a Next.js app (next.config.ts, app/, components/); README requires \"npm install && npm run dev\". UI/viewer/index.html is a prototype gallery, not an entrypoint."
+    },
+    "cascade": {
+      "playable_status": "not_browser_based",
+      "note": "Prokopiy8247/Fable5-2-Natural-Disasters: games/01-cascade is a Unity project (Assets/, Packages/, ProjectSettings/, Builds/, PLAY.bat). No HTML in the repository."
+    },
+    "mesocyclone": {
+      "playable_status": "not_browser_based",
+      "note": "Prokopiy8247/Fable5-2-Natural-Disasters: games/02-mesocyclone is a Unity project. No HTML in the repository."
+    },
+    "zero": {
+      "playable_status": "not_browser_based",
+      "note": "Prokopiy8247/Fable5-2-Natural-Disasters: games/03-zero is a Unity project. No HTML in the repository."
+    },
+    "fableflight": {
+      "playable_status": "not_browser_based",
+      "note": "Rolandjg/fableflight is a Rust binary (Cargo.toml, src/, assets/). Native build; no browser artifact."
+    },
+    "tropical-island": {
+      "playable_status": "not_browser_based",
+      "note": "Tarzno/tropical_island is a Godot 4 project (project.godot, export_presets.cfg, scenes/main.tscn). Needs a Godot export, not a browser."
+    },
+    "out-of-reach": {
+      "playable_status": "not_browser_based",
+      "note": "alex-slovakia/out-of-reach is a Unity project (Assets/Scenes/SampleScene.unity, ProjectSettings/, Packages/). HTML in the repo is documentation only."
+    },
+    "superforge-gt": {
+      "playable_status": "not_browser_based",
+      "note": "jreinach-alt/sf-gt is a C project (Makefile, engine/, allocator/). Native build; no browser artifact."
+    }
+  }
 }

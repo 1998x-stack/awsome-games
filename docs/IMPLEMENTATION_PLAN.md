@@ -48,6 +48,18 @@ GitHub Pages 的 `build` 与 `deploy` 两个 job 均 success，线上页面全�
 * **本轮新增**：修复"重建种子会伪造证据行"的缺陷——`project_evidence` 从 155 稳定在 155（此前
   每次重建翻倍到 310），且真实 `evidence_type`/`confidence` 可无损往返。
 * **本轮新增**：修复幂等导入不幂等（`sqlite_sequence` 单调增长、`updated_at` 抖动）。
+* **本轮新增**：入口映射可被审阅修正并可离线重放。`config/project_overrides.json` 现覆盖 19 个作品：
+  11 个入口路径是页面 `<title>` 与目录标题**逐字对得上**才写入的（例：`XDracam/game/index.html`
+  的 title 就是 `T-Minus`；`ONE_PROMPT_WORLDS` 的 13 个游戏里按标题精确映射到 `gameN/`，
+  注意其根 `index.html` 只是菜单）；7 个声明为 `not_browser_based`（Unity/Godot/Rust/C，
+  仓库内**没有任何 HTML**）；1 个声明为 `requires_build`（`%BASE_URL%` 与 `/src/main.tsx`
+  证明是打包器外壳）。`needs_review` 19 → 0。
+  新增 `--reclassify`：读已记录的 `repository_files` 重算映射，**无克隆、无网络**。
+  声明式状态只允许 `DECLARED_REVIEWED_STATUSES` 中的值，且不能声明运行时结果（有回归测试守住）。
+* **本轮新增**：`missing_static_assets()` 不再把 favicon/图标/字体算作缺失资源——运行时探针本就
+  把它们 stub 成空响应，两侧标准对齐后 `aaron-sulbaran/jester` 不再因三个 favicon 被误判为
+  `missing_assets`（实测真实原因是它自身的 TS module 在必需沙箱下被 CORS 拒绝），
+  而 `bhoult/phone-games` 缺的 `engine.js`（功能性依赖）仍被正确报出。
 
 ### 未完成
 
@@ -80,28 +92,42 @@ GitHub Pages 的 `build` 与 `deploy` 两个 job 均 success，线上页面全�
 
 ---
 
-## M3：隔离运行与结果回写 — `能力 VERIFIED / 第三方实测 NOT_TESTED`
+## M3：隔离运行与结果回写 — `能力 VERIFIED / 第三方实测 123 个入口已测`
 
-### 已完成（本轮实质推进）
+### 已完成
 
 * **真正的 OS 级隔离执行器**：`scripts/isolation/Dockerfile.smoke` +
   `scripts/isolation/run_isolated_smoke.sh`。强制 `--network none`、只读根文件系统、
   **被审目录只读挂载**（页面无法篡改自身来源证据）、`--cap-drop ALL`、
   `no-new-privileges`、`--pids-limit`、内存/CPU 上限、非 root（uid 65534）、命名卷收报告。
 * **启动前预检**：容器看不到入口时给出可执行提示，避免"空挂载"被误读为测试失败。
-* **真实执行**：自编写无害 fixture 在 `--network none` 下得到 `BROWSER_LOAD_CHECKED`、
-  `iframe_isolation: true`、无控制台错误、无阻断请求，并保存截图。
 * **fail-closed 验证**：自编 fixture 无法冒充真实 `work_id` 导入，`research_runtime_evidence` 保持 0 行。
 * 导入器仍要求 40 位 commit SHA、入口与已审 `entry_path` 一致、内容寻址 `evidence_id`、重复导入幂等。
+* **分离式批量模式**（`--detach` / `--collect` / `--name`）：并行分片各占一个容器，
+  清单与报告目录按容器名分域，容器不能带 `--rm`（否则报告取不回来）。
+* **全量实测 123 个入口（0 未测）**，覆盖 32 个仓库。产物：
+  `data/reports/repo-survey-2026-11-18.json`（含逐条指纹、可用 `--manifest/--reports` 重放）。
+* **输入归因规则**（`scripts/input_attribution.py`）：探针与离线汇总器**共用同一份实现**，
+  所以历史报告能用修正后的规则重判而无需重跑浏览器。
+* **把实测结论写进权威库的写入者**（`scripts/apply_survey_to_catalog.py`）：
+  在此之前库里那些 `sandbox_incompatible` / `runtime_*` 行**没有任何脚本能产生**，只有"保留"。
+  新写入者按构造 fail-closed：只写限制性状态、拒跑不合格证据文件、绝不弱化既有结论、记录证据 sha256。
+* **失败分类词表**：把"产物失败"拆成需要不同决定的类别（需 CDN / 需网络 / 沙箱不兼容 /
+  第三方信标 / 设备传感器 / 输入无法归因 / 驱动被阻塞 / 渲染器崩溃=**环境上限**）。
 
 ### 未完成 / 阻塞
 
-* **第三方游戏实测 0 个**（`NOT_TESTED`）：本地没有第三方源码快照；运行第三方程序属需人工确认的动作。
-* 未实现"每个游戏真实交互预期"的行为断言（点击/键盘/触控）；因此无人能拿到 `GAMEPLAY_VERIFIED`。
-* WebRTC/UDP/WebGPU 的浏览器兼容性矩阵未测。
+* **8 个入口在本机环境内测不出结论**：4 个阻塞驱动（外部 `timeout -s KILL` 在 60 秒终止，
+  两批独立运行可重现），4 个驱动侧异常（其中渲染器崩溃在本机 2 CPU / 4 GB 的 Docker VM 上
+  属环境上限）。它们**不**被写成对产物的判断，只记 `runtime_driver_timeout` 或不记状态。
+* **仍然没有 `GAMEPLAY_VERIFIED`**，而且这次是刻意为之：机器能做出的最强主张只是
+  `input_responsive`（可归因的输入响应）。
+* 未实现"每个游戏真实交互预期"的行为断言（点击/键盘/触控 -> 预期状态变化）；
+  因此无人能拿到 `GAMEPLAY_VERIFIED`，站点上也就不存在这个标签。
+* WebRTC/UDP/WebGPU 的浏览器兼容性矩阵未测。第三方程序仍**必须在 OS/网络隔离内**运行。
 
-**下一步：** 在任何第三方运行前取得人工确认；确认后在隔离执行器中按
-`--root <staged> --entry <已审入口>` 运行，并逐游戏补充交互断言。
+**下一步：** 对 8 个未能测出的入口在更宽裕的配置下各重试一次（已完成一次，见交接报告）；
+为已可归因的 4 个作品补写逐游戏交互断言，作为从 `input_responsive` 迈向人工确认的证据。
 
 ---
 

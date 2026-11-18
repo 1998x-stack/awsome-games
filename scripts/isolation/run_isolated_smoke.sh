@@ -33,6 +33,9 @@ MANIFEST=""
 IDLE_MS=""
 SETTLE_MS=""
 ENTRY_TIMEOUT=""
+DETACH=0
+COLLECT=0
+NAME=""
 
 die() { printf '%s\n' "error: $*" >&2; exit 2; }
 
@@ -48,6 +51,9 @@ while [ $# -gt 0 ]; do
     --idle-ms) IDLE_MS="${2:-}"; shift 2 ;;
     --settle-ms) SETTLE_MS="${2:-}"; shift 2 ;;
     --per-entry-timeout) ENTRY_TIMEOUT="${2:-}"; shift 2 ;;
+    --detach) DETACH=1; shift ;;
+    --collect) COLLECT=1; shift ;;
+    --name) NAME="${2:-}"; shift 2 ;;
     --browser-version) BROWSER_VERSION="${2:-}"; shift 2 ;;
     --environment) ENVIRONMENT="${2:-}"; shift 2 ;;
     -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
@@ -55,9 +61,25 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+[ -n "$OUT" ] || die "--out is required"
+if [ "$DETACH" = "1" ] || [ "$COLLECT" = "1" ]; then
+  [ -n "$NAME" ] || die "--detach/--collect require --name"
+fi
+# --collect needs neither --root nor --entry nor a manifest: it only retrieves.
+if [ "$COLLECT" = "1" ]; then
+  # Copy the reports out AND remove the container, so a finished shard frees CPU.
+  docker cp "$NAME:/reports/." "$OUT/" >/dev/null 2>&1 || die "cannot copy reports from $NAME"
+  # batch runs write into /reports/batch; flatten so callers get one report dir.
+  if [ -d "$OUT/batch" ]; then
+    cp -R "$OUT/batch/." "$OUT/" 2>/dev/null || true
+    rm -rf "$OUT/batch"
+  fi
+  docker rm -f "$NAME" >/dev/null 2>&1 || true
+  printf 'collected reports from %s into %s\n' "$NAME" "$OUT"
+  exit 0
+fi
 [ -n "$ROOT" ] || die "--root is required"
 if [ "$MODE" != "batch" ]; then [ -n "$ENTRY" ] || die "--entry is required"; fi
-[ -n "$OUT" ] || die "--out is required"
 case "$MODE" in
   smoke|gameplay|batch) ;;
   *) die "--mode must be smoke, gameplay or batch" ;;
@@ -69,8 +91,11 @@ if [ "$MODE" = "batch" ]; then
   # directories, so the manifest is staged inside the repository instead.
   REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd -P)"
   mkdir -p "$REPO_ROOT/.cache"
-  cp "$MANIFEST" "$REPO_ROOT/.cache/isolation-manifest.json"
-  MANIFEST_ABS="$REPO_ROOT/.cache/isolation-manifest.json"
+  # Stage per container name: concurrent shards must not overwrite each other.
+  STAGE_KEY="${NAME:-batch}"
+  mkdir -p "$REPO_ROOT/.cache"
+  MANIFEST_ABS="$REPO_ROOT/.cache/isolation-manifest-$STAGE_KEY.json"
+  cp "$MANIFEST" "$MANIFEST_ABS"
 fi
 [ -d "$ROOT" ] || die "staged root does not exist: $ROOT"
 command -v docker >/dev/null 2>&1 || die "docker is not installed"
@@ -123,6 +148,10 @@ CONTAINER_ARGS=(
 
 if [ "$MODE" = "batch" ]; then
   REPORT_NAME="summary.json"
+  # Reuse the Python batch driver: it already owns per-entry supervision (external
+  # `timeout -s KILL`, start_new_session + killpg, child output to a file, and an
+  # honest TIMEOUT_ABORTED report). Re-implementing that in shell silently lost the
+  # timeout reports, so there is exactly one implementation of the rule now.
   SMOKE_ARGS=(/work/browser_batch_probe.py --root /staged --manifest /manifest.json --out /reports/batch)
   [ -n "$IDLE_MS" ] && SMOKE_ARGS+=(--idle-ms "$IDLE_MS")
   [ -n "$SETTLE_MS" ] && SMOKE_ARGS+=(--settle-ms "$SETTLE_MS")
@@ -139,6 +168,22 @@ else
 fi
 if [ -n "$SCREENSHOT_NAME" ]; then
   SMOKE_ARGS+=(--screenshot "/reports/$SCREENSHOT_NAME")
+fi
+
+if [ "$DETACH" = "1" ]; then
+  docker rm -f "$NAME" >/dev/null 2>&1 || true
+  docker volume rm -f "$VOLUME" >/dev/null 2>&1 || true
+  docker volume create "$VOLUME" >/dev/null
+  CONTAINER_ARGS+=(--name "$NAME")
+  # Drop --rm: the container must outlive the run so --collect can copy reports.
+  FILTERED=()
+  for arg in "${CONTAINER_ARGS[@]}"; do
+    [ "$arg" = "--rm" ] || FILTERED+=("$arg")
+  done
+  CONTAINER_ARGS=("${FILTERED[@]}")
+  printf 'detached isolated batch: container=%s volume=%s\n' "$NAME" "$VOLUME"
+  docker run -d "${CONTAINER_ARGS[@]}" "$IMAGE" "${SMOKE_ARGS[@]}"
+  exit 0
 fi
 
 printf 'running isolated %s test: image=%s entry=%s\n' "$MODE" "$IMAGE" "$ENTRY"

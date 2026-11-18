@@ -1,554 +1,328 @@
 {
-  "captured_at": "2026-11-17T08:12:00Z",
-  "base_sha": "ebab78e8f558abb37f7d02ff458c2edef1607801",
-  "head_sha": "3375af2af1f8c68658d606b709326df7f439bfcb",
-  "branch": "feat/pi-agent-baseline-hardening-20261117",
-  "pr": "https://github.com/1998x-stack/awsome-games/pull/9",
+  "captured_at": "2026-11-18T03:40:00Z",
+  "base_sha": "0f6ed51",
+  "head_sha": "PENDING_COMMIT",
+  "branch": "feat/deep-build-all-repos",
+  "pr": "PENDING",
+  "scope": "Measure every entrypoint that exists locally, in a disposable network-isolated container, using subagents for parallel shards, and make the conclusion reproducible.",
   "environment": {
-    "os": "macOS (Apple Silicon)",
-    "python_project": "3.12.15",
-    "python_system": "3.9.6 (below the 3.10+ documented requirement; a venv was used instead)",
+    "os": "Darwin arm64 (macOS, Apple Silicon)",
+    "python_project": "3.12.15 (.venv)",
+    "python_system": "3.9.6 (below the documented requirement; the venv is used instead)",
     "node": "v26.13.1",
-    "git": "2.54.0 (Apple Git-157)",
-    "docker": "29.9.1, daemon Ubuntu 24.04.4 LTS",
-    "sqlite": "3.54.0",
+    "git": "2.54.0",
+    "sqlite": "3.54.1",
+    "docker_client": "29.9.1",
+    "docker_server": "29.5.2 (daemon Ubuntu 24.04.4 LTS)",
+    "docker_vm": "Docker Desktop VM: 2 CPUs / 4095643648 bytes RAM",
     "playwright": "1.65.2",
     "chromium": "headless shell 159.0.8154.6",
-    "start_tree": "clean, 0 ahead / 0 behind origin/main",
-    "baseline_db_backup": "/tmp/awsome-games-backup/catalog.sqlite.baseline-ebab78e",
-    "baseline_db_sha256": "602a2a80a77b0e95b883eb419006a8017ee4cca5d857a31c4a0712802b56d5fa",
-    "branches": [
-      "feat/pi-agent-baseline-hardening-20261117",
-      "fix/m5-internal-evidence-link"
-    ]
+    "critical_lesson": "Every extra `docker` call competes with the browser for the VM's 2 CPUs. Polling with a throwaway container or `docker exec` turned 3.5 s per entry into minutes and was the real cause of the observed 4-17 minute stalls."
   },
   "metrics": [
     {
-      "name": "projects",
-      "value": 155,
-      "before": 155,
-      "source": "SELECT COUNT(*) FROM projects",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z"
-    },
-    {
-      "name": "repositories",
+      "metric": "repositories_cloned_locally",
       "value": 54,
-      "before": 54,
-      "source": "SELECT COUNT(*) FROM repositories",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z"
+      "note": "3.4 GB in games/_repos, gitignored"
     },
     {
-      "name": "project_repositories",
-      "value": 150,
-      "before": 150,
-      "source": "SELECT COUNT(*) FROM project_repositories",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z"
+      "metric": "repositories_with_a_measured_entrypoint",
+      "value": 32
     },
     {
-      "name": "links",
-      "value": 64,
-      "before": 64,
-      "source": "SELECT COUNT(*) FROM links",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z"
+      "metric": "entrypoints_measured",
+      "value": 123
     },
     {
-      "name": "prompts",
-      "value": 76,
-      "before": 76,
-      "source": "SELECT COUNT(*) FROM prompts",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z"
+      "metric": "entrypoints_untested",
+      "value": 0
     },
     {
-      "name": "evidence_sources",
-      "value": 81,
-      "before": 81,
-      "source": "SELECT COUNT(*) FROM evidence_sources",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z"
+      "metric": "input_responsive",
+      "value": 4,
+      "note": "strongest claim a machine may make here; requires the channel to be stable while idle"
     },
     {
-      "name": "project_evidence",
-      "value": 155,
-      "before": 155,
-      "regression_observed": 310,
-      "source": "SELECT COUNT(*) FROM project_evidence",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z",
-      "note": "a rebuild used to double this to 310 by inserting a fabricated sqlite_snapshot_reconstruction row; fixed"
+      "metric": "input_response_not_attributable",
+      "value": 15,
+      "note": "page repaints on its own, so a post-input pixel change proves nothing"
     },
     {
-      "name": "research_source_records",
-      "value": 1118,
-      "before": null,
-      "source": "SELECT COUNT(*) FROM research_source_records",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z",
-      "note": "table absent from the committed baseline DB; materialised on first build from data/research/v1"
+      "metric": "entrypoints_with_an_unmeasurable_outcome",
+      "value": 7,
+      "note": "3 blocked the driver (reproduced at --memory 2g / 120 s, and the blocked child produced no output at all), 3 hit driver-side iframe locating timeouts, 1 crashed the renderer even at 2 GB. None is recorded as a conclusion about the artifact."
     },
     {
-      "name": "research_posts",
-      "value": 907,
-      "before": null,
-      "source": "SELECT COUNT(*) FROM research_posts",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z",
-      "note": "906 exact X status ids + 1 orphan key; NOT 907 games"
-    },
-    {
-      "name": "research_works",
-      "value": 64,
-      "before": null,
-      "source": "SELECT COUNT(*) FROM research_works",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z"
-    },
-    {
-      "name": "research_repositories",
-      "value": 83,
-      "before": null,
-      "source": "SELECT COUNT(*) FROM research_repositories",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z"
-    },
-    {
-      "name": "research_claims",
-      "value": 12,
-      "before": null,
-      "source": "SELECT COUNT(*) FROM research_claims",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z"
-    },
-    {
-      "name": "research_project_links",
-      "value": 63,
-      "before": null,
-      "source": "SELECT COUNT(*) FROM research_project_links",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z",
-      "note": "all method=EXACT_REPO_AND_TITLE"
-    },
-    {
-      "name": "reviewed_static_entries",
-      "value": 11,
-      "before": 11,
-      "source": "SELECT COUNT(*) FROM research_works WHERE entry_status='TREE_PATH_REVIEWED_NOT_EXECUTED'",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z"
-    },
-    {
-      "name": "runtime_evidence_rows",
+      "metric": "gameplay_verified",
       "value": 0,
-      "before": 0,
-      "source": "SELECT COUNT(*) FROM research_runtime_evidence",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z",
-      "note": "no third-party gameplay has been executed or verified"
+      "note": "deliberately 0; only build_runtime_evidence.py may raise it, after human review"
     },
     {
-      "name": "work_reviews",
-      "value": 0,
-      "before": 0,
-      "source": "SELECT COUNT(*) FROM research_work_reviews",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z"
+      "metric": "entrypoints_loading_cleanly",
+      "value": 74
     },
     {
-      "name": "post_reviews",
-      "value": 0,
-      "before": 0,
-      "source": "SELECT COUNT(*) FROM research_post_reviews",
-      "method": "sqlite",
-      "captured_at": "2026-11-17T07:47:00Z"
+      "metric": "entrypoints_blocking_the_driver",
+      "value": 3
     },
     {
-      "name": "published_games",
-      "value": 0,
-      "before": 0,
-      "source": "scripts/build_site.py output field published_games",
-      "method": "build_site",
-      "captured_at": "2026-11-17T07:47:00Z"
+      "metric": "needs_review_projects_before",
+      "value": 19
     },
     {
-      "name": "unittest_count",
-      "value": 76,
-      "before": 56,
-      "source": "python -m unittest discover -s tests -v",
-      "method": "unittest",
-      "captured_at": "2026-11-17T07:47:00Z"
+      "metric": "needs_review_projects_after",
+      "value": 0
+    },
+    {
+      "metric": "published_playable",
+      "value": 1,
+      "note": "Soccer.html, unchanged by this round"
     }
   ],
-  "milestones": {
-    "M1": {
-      "status": "PARTIAL",
-      "verified": [
-        "evidence semantics separated (model vs prompt)",
-        "exact-only merging (EXACT_REPO_AND_TITLE)",
-        "frozen snapshot immutability",
-        "independent review layer",
-        "provenance fabricated-on-rebuild defect fixed (project_evidence 310 -> 155)",
-        "idempotent import defect fixed (sqlite_sequence / updated_at)"
-      ],
-      "not_started": [
-        "904 unmapped posts need first-hand evidence review",
-        "Last Return alias still CANDIDATE",
-        "multi-to-multi alias/mirror modelling"
-      ]
-    },
-    "M2": {
-      "status": "NOT_STARTED",
-      "verified": [
-        "83 candidates routed only (32 outside the legacy collector)"
-      ],
-      "not_started": [
-        "zero source-level/licence audits",
-        "no data/research/audits/*.json"
-      ]
-    },
-    "M3": {
-      "status": "CAPABILITY_VERIFIED_THIRD_PARTY_NOT_TESTED",
-      "verified": [
-        "OS-level isolation harness (--network none, read-only rootfs, read-only staged mount, dropped caps, non-root)",
-        "self-authored fixture -> BROWSER_LOAD_CHECKED with iframe_isolation true",
-        "importer fails closed against a self-authored fixture"
-      ],
-      "not_started": [
-        "zero third-party runs",
-        "no per-game interaction assertions",
-        "no WebRTC/UDP/WebGPU matrix"
-      ]
-    },
-    "M4": {
-      "status": "PARTIAL",
-      "verified": [
-        "read-only daily drift check",
-        "validate.yml now covers compileall/unit/node/bash/site"
-      ],
-      "not_started": [
-        "SourceAdapter abstraction",
-        "metadata-only PR proposals",
-        "link liveness monitoring",
-        "migration framework"
-      ]
-    },
-    "M5": {
-      "status": "PARTIAL",
-      "verified": [
-        "documented timeline + review queue",
-        "textContent-only rendering",
-        "separate evidence levels",
-        "cross-page traceability link defect fixed",
-        "zero page/console errors in real Chromium"
-      ],
-      "not_started": [
-        "all-device visual acceptance",
-        "bi-directional Post<->Work<->Repository<->Audit navigation",
-        "review-queue CSV export"
-      ]
+  "survey_artifact": {
+    "path": "data/reports/repo-survey-2026-11-18.json",
+    "sha256": "f688e4f16e743fb644f9af4acd317d486fe76c69845a01c9ec965ca3cf3696ad",
+    "counts": {
+      "manifest_entries": 123,
+      "measured": 123,
+      "untested": 0,
+      "input_responsive": 4,
+      "gameplay_verified": 0,
+      "by_status": {
+        "INPUT_RESPONSE_NOT_ATTRIBUTABLE": 15,
+        "INCOMPLETE_OR_FAILED": 26,
+        "INPUT_RESPONSIVE": 4,
+        "TIMEOUT_ABORTED": 3,
+        "BROWSER_LOAD_CHECKED": 74,
+        "NO_OBSERVABLE_RESPONSE": 1
+      },
+      "by_failure_class": {
+        "INPUT_RESPONSE_NOT_ATTRIBUTABLE": 15,
+        "EXTERNAL_CDN_REQUIRED": 10,
+        "PASS": 78,
+        "THIRD_PARTY_ANALYTICS_BLOCKED": 1,
+        "SANDBOX_OPAQUE_ORIGIN_BREAKS_OWN_SCRIPT": 9,
+        "OPTIONAL_DEVICE_SENSOR_DENIED": 2,
+        "PAGE_BLOCKED_DRIVER": 3,
+        "DRIVER_FLAKE_OR_TIMEOUT": 3,
+        "NO_OBSERVABLE_RESPONSE": 1,
+        "RENDERER_CRASHED_ENVIRONMENT_LIMIT": 1
+      }
     }
+  },
+  "failure_classes": {
+    "INPUT_RESPONSE_NOT_ATTRIBUTABLE": 15,
+    "EXTERNAL_CDN_REQUIRED": 10,
+    "PASS": 78,
+    "THIRD_PARTY_ANALYTICS_BLOCKED": 1,
+    "SANDBOX_OPAQUE_ORIGIN_BREAKS_OWN_SCRIPT": 9,
+    "OPTIONAL_DEVICE_SENSOR_DENIED": 2,
+    "PAGE_BLOCKED_DRIVER": 3,
+    "DRIVER_FLAKE_OR_TIMEOUT": 3,
+    "NO_OBSERVABLE_RESPONSE": 1,
+    "RENDERER_CRASHED_ENVIRONMENT_LIMIT": 1
   },
   "defects_fixed": [
     {
-      "id": 1,
-      "severity": "P1",
-      "area": "M1 provenance",
-      "evidence": "project_evidence 155 -> 310 after rebuild; 155 fabricated rows in site/data/catalog.json",
-      "fix": "export_seed.py round-trips real evidence_type/confidence; seed_database never materialises SYNTHETIC_EVIDENCE_TYPES",
-      "status": "VERIFIED"
+      "id": "collect-blocked-by-validation",
+      "what": "`--collect` was rejected by the `--root is required` check before it could copy reports",
+      "fix": "validate --root/--entry only on the paths that need them"
     },
     {
-      "id": 2,
-      "severity": "P1",
-      "area": "M1 idempotency",
-      "evidence": "two consecutive builds produced a 10-line logical dump difference; sqlite_sequence monotonically grew",
-      "fix": "guarded INSERT ... WHERE NOT EXISTS on AUTOINCREMENT tables; updated_at only advances on real change",
-      "status": "VERIFIED",
-      "after_evidence": "dump difference 0 lines"
+      "id": "detach-kept-rm",
+      "what": "detached batch containers kept `--rm`, so the container was deleted on exit and `docker cp` had nothing to read",
+      "fix": "strip --rm in detach mode"
     },
     {
-      "id": 3,
-      "severity": "P1",
-      "area": "M5 navigation",
-      "evidence": "review.html Evidence Lab cross-link rendered as <span>; anchors per card = 1",
-      "fix": "resolve URLs against document.baseURI, keep same-origin relative, reject embedded credentials",
-      "status": "VERIFIED",
-      "after_evidence": "anchors per card = 2, deep link opens the dialog"
+      "id": "entrypoint-python-vs-shell",
+      "what": "the image ENTRYPOINT is python3, so a shell driver was handed to the Python interpreter (SyntaxError)",
+      "fix": "override the entrypoint for the batch driver"
     },
     {
-      "id": 4,
-      "severity": "P2",
-      "area": "M1 safety",
-      "evidence": "build_catalog.py --fresh unlinked the authoritative SQLite with no backup",
-      "fix": "integrity-checked snapshot to data/backups/ before deletion; refuse on failure",
-      "status": "VERIFIED"
+      "id": "shared-manifest-path",
+      "what": "parallel shards staged their manifest at the same path and overwrote each other",
+      "fix": "stage per container name"
     },
     {
-      "id": 5,
-      "severity": "P2",
-      "area": "M5 accuracy",
-      "evidence": "site/index.html hardcoded '83 个仓库'",
-      "fix": "value-free copy plus a test banning hardcoded research counts",
-      "status": "VERIFIED"
+      "id": "REGRESSION-my-shell-driver-lost-timeout-reports",
+      "severity": "self-inflicted",
+      "what": "I rewrote the batch driver in shell to 'supervise Python from outside'. The rationale was wrong: run_batch already delegates supervision to an external `timeout -s KILL` and writes TIMEOUT_ABORTED. My fallback call omitted the required --root and discarded stderr, so 5 timeout reports were silently lost (109/114). A subagent found it by reporting that the report count did not match the manifest.",
+      "fix": "deleted my driver and reused the existing implementation (net less code); added the genuinely needed --detach/--collect/per-name staging; and finally TESTED the timeout path with a deliberately hanging fixture - the verification whose absence let the bug hide. Result: 14/14 reports present, including 4 TIMEOUT_ABORTED."
     },
     {
-      "id": 6,
-      "severity": "P2",
-      "area": "security",
-      "evidence": "app.js/research.js accepted https://user:pass@host in link rendering",
-      "fix": "all three surfaces reject embedded credentials",
-      "status": "VERIFIED"
+      "id": "input-attribution-false-positives",
+      "what": "the probe treated 'pixels changed after input' as input response, which a self-animating page satisfies without reacting to anything: 10 of 11 reported INPUT_RESPONSIVE entries were already changing during the idle baseline, and 7 had a byte-identical DOM from load to finish",
+      "fix": "new scripts/input_attribution.py, shared by both probes AND the offline aggregator, so historical reports are re-read with the corrected rule instead of being re-measured. The headline number went DOWN from 11 to 4, and the previous round's 4 included 2 that do not survive the rule."
     },
     {
-      "id": 7,
-      "severity": "P2",
-      "area": "hygiene",
-      "evidence": ".gitignore did not ignore .venv/ although the README instructs creating it",
-      "fix": "added .venv/ and venv/",
-      "status": "VERIFIED"
+      "id": "gameplay-verified-name-collision",
+      "what": "the survey aggregator counted 'probe saw a reaction' as gameplay_verified, while import_browser_report.py requires self-reported reports to declare gameplay_verified False",
+      "fix": "probes always write False; the survey artifact's gameplay_verified is always 0 (pinned by a test); input_responsive is the machine claim"
     },
     {
-      "id": 8,
-      "severity": "P1",
-      "area": "M5 navigation",
-      "evidence": "live https://1998x-stack.github.io/awsome-games/review.html: both anchors carried target=\"_blank\", so a real click on the Evidence Lab link opened a new tab instead of navigating in place",
-      "fix": "review.js makeLink() and research.js link() now force a new tab only for cross-origin URLs; same-origin audit-trail hops navigate in place",
-      "status": "VERIFIED",
-      "after_evidence": "live click opened 0 new tabs, navigated to research.html?kind=repositories&id=..., detail dialog open",
-      "test_lesson": "the PR #9 E2E test followed the link with page.goto() instead of clicking it; the strengthened test asserts target attributes and performs a real click() and was proven to FAIL on the pre-fix code"
+      "id": "missing-sandbox-incompatibility-class",
+      "what": "circular-tic-tac-toe landed in OTHER: 'Failed to read the serviceWorker property ... lacks the allow-same-origin flag' is the same root cause as shooter.html's localStorage error",
+      "fix": "classified as SANDBOX_OPAQUE_ORIGIN_BREAKS_OWN_SCRIPT; renderer crashes split out as RENDERER_CRASHED_ENVIRONMENT_LIMIT because on a 2 CPU / 4 GB VM that is an environment limit"
+    },
+    {
+      "id": "favicons-treated-as-missing-game-assets",
+      "what": "aaron-sulbaran/jester was reported missing_assets because three favicons were absent, while the game itself was fine",
+      "fix": "missing_static_assets() ignores icons/manifests/fonts, the same things the runtime probe stubs. jester's real cause is now measured (its own TS module fails CORS under the opaque origin), and phone-games' genuinely absent engine.js is still reported"
+    },
+    {
+      "id": "no-writer-for-runtime-statuses",
+      "what": "the catalog's sandbox_incompatible/runtime_* rows had no script that could produce them; only collect_repositories.py preserved them, so they were not auditable or reproducible",
+      "fix": "new scripts/apply_survey_to_catalog.py: fail-closed writer that only writes restrictive statuses, refuses surveys without isolation config/evidence, never weakens an existing conclusion, supports evidenced retraction, and records the evidence file's sha256"
+    },
+    {
+      "id": "probe-verdict-vocabulary-drifted",
+      "what": "browser_gameplay_probe.STATUSES did not list the new status after the rule changed",
+      "fix": "the vocabulary now uses the shared constants, so the rule and the vocabulary cannot drift apart"
     }
   ],
   "tests": {
-    "command": "python -m unittest discover -s tests -v",
-    "passed": 76,
-    "failed": 0,
-    "before": 56,
-    "new_files": [
-      "tests/test_site_link_policy.py",
-      "tests/test_site_e2e.py",
-      "tests/test_seed_provenance.py",
-      "tests/test_isolation_harness.py"
-    ],
-    "browser_e2e": {
-      "tool": "playwright 1.65.2 / chromium headless shell 159.0.8154.6",
-      "pages": [
-        "index.html",
-        "research.html",
-        "review.html"
-      ],
-      "page_errors": 0,
-      "console_errors": 0,
-      "blocked_external_requests": 0,
-      "interactions": [
-        "search",
-        "four filters",
-        "empty state",
-        "load more 36->72",
-        "?work= deep link",
-        "?kind=repositories&id= deep link",
-        "Escape close",
-        "CSV download"
-      ]
+    "command_hardening": ".venv/bin/python -m unittest tests.test_hardening tests.test_catalog",
+    "passed_hardening": 52,
+    "failed_hardening": 0,
+    "command_isolation": ".venv/bin/python -m unittest tests.test_isolation_harness",
+    "passed_isolation": 37,
+    "failed_isolation": 0,
+    "new_regression_tests": {
+      "declared_status_and_offline_reclassify": 6,
+      "cosmetic_assets": 4,
+      "input_attribution": 9,
+      "classification_coverage": 5,
+      "survey_application_incl_retraction": 8
     },
-    "regression_method": "new and strengthened tests were executed against the pre-fix committed review.js: FAILED (2 failures: \"'_blank' is not None\" and a missing-resolver regex); with the fix: OK",
-    "live_production": {
-      "url": "https://1998x-stack.github.io/awsome-games/",
-      "note": "Pages project site served under the /awsome-games/ subpath, the exact scenario the relative-link fix targets",
-      "pages_loaded": [
-        "index.html",
-        "research.html",
-        "review.html"
-      ],
-      "page_errors": 0,
-      "http_status_all_resources": 200,
-      "external_link_target": "_blank",
-      "internal_link_target": null,
-      "tabs_opened_on_internal_click": 0,
-      "url_after_click": "https://1998x-stack.github.io/awsome-games/research.html?kind=repositories&id=0xCodez%2Fthousand-peaks",
-      "detail_dialog_open": true,
-      "detail_title": "Dragon of a Thousand Peaks",
-      "live_research_stats": {
-        "source_records": 1118,
-        "posts": 907,
-        "works": 64,
-        "repositories": 83,
-        "claims": 12
-      },
-      "live_index_stats": {
-        "projects": 155,
-        "repositories": 54,
-        "demos": 59,
-        "published_for_play": 0
-      }
-    }
+    "static": {
+      "compileall": "ok",
+      "bash -n scripts/*.sh scripts/isolation/*.sh": "ok",
+      "node --check site/assets/{app,research,review}.js": "ok"
+    },
+    "catalog_gate": {
+      "check_catalog": "problems: []",
+      "build_catalog --check": "integrity ok, foreign_key_errors 0"
+    },
+    "harness_self_test": "a deliberately hanging fixture produced TIMEOUT_ABORTED while a normal fixture produced BROWSER_LOAD_CHECKED in the same run; before the fix that path silently produced no file at all"
   },
   "runtime_evidence": {
-    "third_party_games_tested": 0,
-    "third_party_status": "NOT_TESTED",
-    "fixture_only": {
-      "scope": "self-authored harmless fixture, NOT a third-party game",
-      "entry": ".cache/isolated-stage/demos/fps/index.html",
-      "entry_sha256": "5af5f546bb8bd5090e70747d15a82e8817af0a6ddf06608f136331d2ba7cac87",
-      "isolation": "docker --network none --read-only --tmpfs /tmp --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges --pids-limit 256 --memory 1g --cpus 1, staged root mounted read-only",
-      "status": "BROWSER_LOAD_CHECKED",
-      "iframe_isolation": true,
-      "frame_body_loaded": true,
-      "console_errors": [],
-      "blocked_requests": [],
-      "gameplay_verified": false,
-      "screenshot": ".cache/iso-reports/smoke.png",
-      "screenshot_sha256": "5a91a8c388c78289ebae06c5746de054d3e043eb760ffaf02199706a234345c0",
-      "report": ".cache/iso-reports/smoke.json"
+    "container": "docker run --network none --read-only --tmpfs /tmp --user 65534:65534 --cap-drop ALL --security-opt no-new-privileges --pids-limit 256 --memory 1g --cpus 1",
+    "batch_driver": "scripts/browser_batch_probe.py (run_batch), external `timeout -s KILL` per entry, manifest/report staged per container name",
+    "subagents_used": 4,
+    "entries_per_shard": {
+      "shard1": 57,
+      "shard2": 57,
+      "final": 14,
+      "retry": 8
     },
-    "importer_fail_closed": {
-      "attempt": "import the self-authored fixture against work_id F52-W012",
-      "result": "ValueError: Missing/unsafe staged entry (exit 1)",
-      "runtime_evidence_rows_after": 0
-    },
-    "not_run": [
-      "any third-party HTML/JS",
-      "any upstream npm install or build",
-      "WebRTC/UDP/WebGPU compatibility",
-      "actual gameplay interaction verification for any real work"
-    ]
+    "third_party_games_executed": true,
+    "where_executed": "only inside the disposable container; never on the host",
+    "sandbox_weakened": false,
+    "input_responsive_entries": [
+      {
+        "key": "neon-runner",
+        "repo": "Ilias-AK/NewGameFromFable5.2",
+        "channel": "dom",
+        "status": "INPUT_RESPONSIVE",
+        "iframe_isolation": true,
+        "console_errors": 0
+      },
+      {
+        "key": "sternenjager",
+        "repo": "oldzitterhand/sternenjaeger",
+        "channel": "dom",
+        "status": "INPUT_RESPONSIVE",
+        "iframe_isolation": true,
+        "console_errors": 0
+      },
+      {
+        "key": "soccer-time-dev-5-1",
+        "repo": "Time-dev-alt/Fable-5.1-Games",
+        "channel": "dom",
+        "status": "INPUT_RESPONSIVE",
+        "iframe_isolation": true,
+        "console_errors": 0
+      },
+      {
+        "key": "world-1-1",
+        "repo": "sorrycc/fable-arcade",
+        "channel": "pixels-with-stable-idle-baseline",
+        "status": "INPUT_RESPONSIVE",
+        "iframe_isolation": true,
+        "console_errors": 0
+      }
+    ],
+    "retry_of_unmeasurable_entries": {
+      "configuration": "--memory 2g, --per-entry-timeout 120 (baseline was 1g / 60 s)",
+      "driver_total": "BROWSER_LOAD_CHECKED 1 | INCOMPLETE_OR_FAILED 4 | TIMEOUT_ABORTED 3",
+      "reports_collected": 8,
+      "reports_expected": 8,
+      "converted": [
+        "aurora-over-the-fjord: TIMEOUT_ABORTED -> BROWSER_LOAD_CHECKED (it needed more time, it was not broken)"
+      ],
+      "reproduced": [
+        {
+          "key": "emberdeep",
+          "outcome": "TIMEOUT_ABORTED again; the child log is 0 bytes"
+        },
+        {
+          "key": "ironvale",
+          "outcome": "TIMEOUT_ABORTED again; the catalog keeps the earlier measured runtime_no_interaction"
+        },
+        {
+          "key": "mothlight-vesper-9",
+          "outcome": "TIMEOUT_ABORTED again; the child log is 0 bytes"
+        },
+        {
+          "key": "lichen-on-slate",
+          "outcome": "the iframe never becomes visible (Locator.wait_for 30 s)"
+        },
+        {
+          "key": "misremember",
+          "outcome": "the renderer still crashes at 2 GB, so it is not a 1 GB limit"
+        },
+        {
+          "key": "saltline",
+          "outcome": "the iframe is visible but bounding_box times out at 15 s"
+        },
+        {
+          "key": "tidebell",
+          "outcome": "the iframe is visible but bounding_box times out at 15 s"
+        }
+      ],
+      "policy": "--per-entry-timeout was not lowered to make entries pass, and no entry was retried until it produced a different answer."
+    }
   },
   "security": {
-    "third_party_code_executed": false,
+    "third_party_code_executed_on_host": false,
     "upstream_install_or_build_executed": false,
-    "isolation_compliant": true,
-    "publication_approvals_changed": false,
+    "sandbox_allow_same_origin_added": false,
+    "publication_approvals_modified": false,
     "approved_repositories_count": 0,
-    "licence_whitelist_changed": false,
-    "frozen_research_json_changed": false,
-    "secrets_found_in_diff": false,
-    "images_bake_credentials": false,
-    "sensitive_paths_excluded_from_image": true,
-    "committed_binary": {
-      "path": "data/catalog.sqlite",
-      "before_bytes": 319488,
-      "after_bytes": 1343488,
-      "note": "research layer materialised; the baseline snapshot had no research_* tables"
-    }
+    "secrets_or_symlinks_committed": false,
+    "catalog_is_authoritative": true,
+    "generated_json_are_projections": true
   },
   "deploy": {
-    "merged": true,
-    "pull_requests": [
-      {
-        "number": 9,
-        "url": "https://github.com/1998x-stack/awsome-games/pull/9",
-        "state": "MERGED",
-        "merge_commit": "e41b877c542bb139ca942782fc93a09328c4dbd2"
-      },
-      {
-        "number": 10,
-        "url": "https://github.com/1998x-stack/awsome-games/pull/10",
-        "state": "MERGED",
-        "merge_commit": "3375af2af1f8c68658d606b709326df7f439bfcb"
-      }
-    ],
-    "branch_protection_on_main": "none (GET /branches/main/protection -> 404)",
-    "ci": [
-      {
-        "pr": 9,
-        "workflow": "Validate catalog",
-        "conclusion": "success",
-        "duration_seconds": 14,
-        "url": "https://github.com/1998x-stack/awsome-games/actions/runs/44042084460"
-      },
-      {
-        "pr": 10,
-        "workflow": "Validate catalog",
-        "conclusion": "success",
-        "duration_seconds": 13,
-        "url": "https://github.com/1998x-stack/awsome-games/actions/runs/44043909660"
-      }
-    ],
-    "pages_workflow": [
-      {
-        "pr": 9,
-        "url": "https://github.com/1998x-stack/awsome-games/actions/runs/44042834054",
-        "build": "success",
-        "deploy": "success",
-        "sha": "e41b877c542bb139ca942782fc93a09328c4dbd2"
-      },
-      {
-        "pr": 10,
-        "url": "https://github.com/1998x-stack/awsome-games/actions/runs/44044106186",
-        "build": "success",
-        "deploy": "success",
-        "sha": "3375af2af1f8c68658d606b709326df7f439bfcb"
-      }
-    ],
-    "pages_url": "https://1998x-stack.github.io/awsome-games/",
-    "live_manifest_repository_ref": "3375af2af1f8c68658d606b709326df7f439bfcb",
-    "playable_published": 0,
-    "repository_snapshots_published": [],
-    "third_party_code_republished": false,
-    "live_site_verified": true
+    "attempted_this_round": false,
+    "note": "no deployment in this round; the site and its manifest are unchanged",
+    "live_playable_published": 1
   },
   "issues": [
-    {
-      "ref": "#4",
-      "severity": "high",
-      "title": "904 unmapped original posts still need first-hand evidence adjudication",
-      "evidence": "only 3 of 907 posts carry a work_id"
-    },
-    {
-      "ref": "#5",
-      "severity": "high",
-      "title": "zero source-level/licence audits across 83 candidate repositories"
-    },
-    {
-      "ref": "#6",
-      "severity": "blocker",
-      "title": "no third-party game has been executed or gameplay-verified",
-      "evidence": "research_runtime_evidence = 0 rows"
-    }
+    "ironvale: the catalog holds a previous measured `runtime_no_interaction`, while the retry measured `runtime_driver_timeout`. The writer refuses to let 'we could not tell this time' erase 'we did tell last time' and reports the conflict for human review.",
+    "7 entrypoints have an unmeasurable outcome in this environment (3 blocked, 3 driver-side locating timeouts, 1 renderer crash). The retry converted 1 of 8 and reproduced the rest.",
+    "repo-survey-2026-11-17.json is kept unchanged as the record of what was claimed then, but its gameplay_verified: 3 used the attribution rule now known to be wrong."
   ],
   "blockers": [
-    {
-      "severity": "blocker",
-      "title": "all 64 research works remain NOT_TESTED; GAMEPLAY_VERIFIED = 0",
-      "reason": "no third-party sources cloned locally; running third-party programs requires explicit human confirmation",
-      "unblock": "confirm authorisation, then run scripts/isolation/run_isolated_smoke.sh against reviewed entry paths"
-    },
-    {
-      "severity": "blocker",
-      "title": "the 11 reviewed static entries cannot be executed",
-      "reason": "entry files are not present locally (games/_repos does not exist)",
-      "unblock": "complete read-only M2 source acquisition and licence review first"
-    },
-    {
-      "severity": "medium",
-      "title": "the SQLite binary is not byte-reproducible",
-      "evidence": "even after journal_mode=DELETE + VACUUM the SHA-256 of two logically identical builds differs",
-      "unblock": "decide whether to adopt a logical dump/JSON projection as the authoritative artifact, or add a logical-dump equality check in CI"
-    }
+    "Local Docker Desktop VM has 2 CPUs / 4 GB, which bounds how much can be measured in parallel and crashes heavy renderers.",
+    "32 research candidate repositories still need an M2 read-only code audit before cloning.",
+    "5 works exist only as external demos (no repository), so they need a real-URL tester that does not exist yet."
   ],
   "next_actions": [
-    "M2: complete a full source-level audit of the 11 repositories that already have reviewed static entries (read-only, lowest risk, highest value)",
-    "M1: turn the 907 posts into batched review work orders layered by kind_signal and match_status",
-    "M5: extend tests/test_site_e2e.py to mobile viewports plus keyboard reachability, and archive screenshot hashes",
-    "M4: introduce the SourceAdapter abstraction plus metadata-only PR proposals, and wire the remaining data/sources.json sources into the read-only drift check",
-    "Keep every navigation test gesture-based: page.goto() masked the target=\"_blank\" defect that only a real click on the live site exposed",
-    "M3 (requires human confirmation): run one reviewed third-party entry end to end inside the isolation harness before scaling up",
-    "Review the three P1 fixes: confirm the updated_at CASE covers every field that should bump the timestamp, and decide the tie-break when one URL carries several real evidence types"
-  ],
-  "prs": [
-    {
-      "number": 9,
-      "url": "https://github.com/1998x-stack/awsome-games/pull/9",
-      "state": "MERGED",
-      "merge_commit": "e41b877c542bb139ca942782fc93a09328c4dbd2"
-    },
-    {
-      "number": 10,
-      "url": "https://github.com/1998x-stack/awsome-games/pull/10",
-      "state": "MERGED",
-      "merge_commit": "3375af2af1f8c68658d606b709326df7f439bfcb"
-    }
+    "Read data/reports/repo-survey-2026-11-18.json and decide whether the 3 driver-blocking entries are page properties or host-page interaction artifacts.",
+    "Read the quoted .log for the 4 driver-blocking entries and decide whether the block is a page property or a host-page interaction.",
+    "Write per-game behavioural assertions for the 4 attributable works: from input_responsive toward a defensible GAMEPLAY_VERIFIED.",
+    "M2 read-only audit of the 32 research candidates before adding them to the collection queue.",
+    "Decide the retry policy for RENDERER_CRASHED_ENVIRONMENT_LIMIT entries (more memory is not available on this host)."
   ]
 }

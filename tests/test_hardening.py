@@ -393,6 +393,171 @@ class RuntimeReviewedStatusTests(unittest.TestCase):
             conn.close()
 
 
+class EntrypointAssetTests(unittest.TestCase):
+    """A missing favicon is not a missing game asset; a missing script is."""
+
+    def _entry(self, tmp, body, extra=()):
+        d=Path(tmp)/'repo'; d.mkdir()
+        (d/'index.html').write_text(body)
+        for name in extra: (d/name).write_text('x')
+        return d
+
+    def test_cosmetic_references_are_not_reported_as_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d=self._entry(tmp, '<link rel="icon" href="./favicon.svg">'
+                               '<link rel="apple-touch-icon" href="apple-touch-icon.png">'
+                               '<link rel="mask-icon" href="safari-pinned-tab.svg">'
+                               '<link rel="manifest" href="site.webmanifest">'
+                               '<link rel="stylesheet" href="style.css">'
+                               '<script src="engine.js"></script>'
+                               '<img src="sprite.png">', extra=('style.css',))
+            self.assertEqual(collector.missing_static_assets(d,'index.html'),['engine.js','sprite.png'])
+
+    def test_font_and_icon_files_are_cosmetic_but_css_is_not(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d=self._entry(tmp, '<link href="theme.woff2" rel="preload">'
+                               '<link href="tile.ico" rel="icon">'
+                               '<link href="game.css" rel="stylesheet">')
+            missing=collector.missing_static_assets(d,'index.html')
+            self.assertEqual(missing,['game.css'])
+
+    def test_favicon_named_svg_is_cosmetic_without_a_rel(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d=self._entry(tmp, '<img src="favicon-32.png">')
+            self.assertEqual(collector.missing_static_assets(d,'index.html'),[])
+
+    def test_same_origin_absolute_and_remote_refs_still_flagged_correctly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            d=self._entry(tmp, '<script src="/src/main.tsx"></script>'
+                               '<script src="https://cdn.example.com/three.js"></script>')
+            self.assertEqual(collector.missing_static_assets(d,'index.html'),['root-relative:/src/main.tsx'])
+
+
+class DeclaredReviewedStatusTests(unittest.TestCase):
+    """A settled fact about a work's kind must survive re-collection, and an editor
+    entry_path override is what decides the entrypoint in a collection repository."""
+
+    def _fixture(self, base, files, status='needs_review', note='', entry_path=''):
+        (base/'site').mkdir()
+        repo_dir=base/'games/_repos'/'example__game'
+        for rel,body in files.items():
+            for target in (base/'snap'/rel, repo_dir/rel):
+                target.parent.mkdir(parents=True,exist_ok=True)
+                target.write_text(body)
+        (base/'config').mkdir()
+        (base/'config/publication_approvals.json').write_text(json.dumps({'approved_repositories':[]}))
+        from db import connect, now
+        conn=connect(base/'catalog.sqlite')
+        conn.execute("INSERT INTO projects(id,slug,title,created_at,updated_at) VALUES('p','p','Sample',?,?)",(now(),now()))
+        conn.execute("""INSERT INTO repositories(full_name,owner,name,html_url,clone_url,clone_status,clone_path,commit_sha)
+                        VALUES('example/game','example','game','https://github.com/example/game',
+                               'https://github.com/example/game.git','cloned',?,'old')""",(str(base/'snap'),))
+        rid=conn.execute("SELECT id FROM repositories WHERE full_name='example/game'").fetchone()[0]
+        conn.execute("""INSERT INTO project_repositories(project_id,repository_id,entry_path,game_path,
+                          entry_confidence,playable_status,note) VALUES('p',?,?,?,'',?,?)""",
+                     (rid,entry_path,'',status,note))
+        conn.commit()
+        return conn,rid,sorted(files)
+
+    def _recollect(self, base, conn, rid, overrides, tracked):
+        row=conn.execute("SELECT * FROM repositories WHERE id=?",(rid,)).fetchone()
+        with patch.object(collector,'ROOT',base), \
+             patch.object(collector,'DEST',base/'games/_repos'), \
+             patch.object(collector,'OVERRIDES',overrides), \
+             patch.object(collector,'clone_one',return_value=(base/'snap','new-sha','main')), \
+             patch.object(collector,'tracked_files',return_value=list(tracked)), \
+             patch.object(collector,'api_metadata',return_value={}):
+            return collector.process_repo(conn,None,row,None,False,True,10_000,100_000)
+
+    def _row(self, conn, rid, columns):
+        return conn.execute(f"SELECT {columns} FROM project_repositories WHERE project_id='p' AND repository_id=?",(rid,)).fetchone()
+
+    def test_declared_not_browser_based_survives_recollection(self):
+        # A native (non-HTML) repository must not silently fall back to needs_review:
+        # there is no HTML to score, so without the declaration it would look unresolved.
+        with tempfile.TemporaryDirectory() as tmp:
+            base=Path(tmp)
+            note='Rust binary: no browser artifact'
+            conn,rid,tracked=self._fixture(base,{'Cargo.toml':'[package]\nname="g"','src/main.rs':'fn main(){}'},
+                                           status='not_browser_based',note=note)
+            overrides={'p':{'playable_status':'not_browser_based','note':note}}
+            self.assertEqual(self._recollect(base,conn,rid,overrides,tracked)['status'],'cloned')
+            row=self._row(conn,rid,'playable_status,note,entry_path')
+            self.assertEqual(row['playable_status'],'not_browser_based')
+            self.assertIn('no browser artifact',row['note'])
+            self.assertEqual(row['entry_path'],'', 'a non-browser work must not claim an entrypoint')
+            self.assertEqual(conn.execute("SELECT playable_status FROM projects WHERE id='p'").fetchone()[0],'not_browser_based')
+            conn.close()
+
+    def test_declared_status_is_ignored_when_the_work_has_no_such_override(self):
+        # Without a declaration the same repository must stay unresolved, proving the
+        # previous test passes because of the override and not because of the fixture.
+        with tempfile.TemporaryDirectory() as tmp:
+            base=Path(tmp)
+            conn,rid,tracked=self._fixture(base,{'Cargo.toml':'[package]\nname="g"'},status='not_browser_based')
+            self._recollect(base,conn,rid,{},tracked)
+            self.assertEqual(self._row(conn,rid,'playable_status')['playable_status'],'needs_review')
+            conn.close()
+
+    def test_override_cannot_assert_a_runtime_result(self):
+        # An override must not be able to claim an outcome nobody measured.
+        with tempfile.TemporaryDirectory() as tmp:
+            base=Path(tmp)
+            conn,rid,tracked=self._fixture(base,{'index.html':'<!doctype html><title>g</title>'})
+            overrides={'p':{'playable_status':'entrypoint_found','note':'forged'}}
+            self._recollect(base,conn,rid,overrides,tracked)
+            row=self._row(conn,rid,'playable_status,entry_confidence')
+            self.assertEqual(row['entry_confidence'],'unique_html', 'the status must come from a real file, not the override')
+            self.assertEqual(row['playable_status'],'entrypoint_found')
+            conn.close()
+
+    def test_reclassify_applies_overrides_offline_from_recorded_files(self):
+        # An auditable correction must not need the network or a re-clone.
+        with tempfile.TemporaryDirectory() as tmp:
+            base=Path(tmp)
+            files={'index.html':'<!doctype html><title>menu</title>',
+                   'game5/index.html':'<!doctype html><title>game5</title>'}
+            conn,rid,tracked=self._fixture(base,files)
+            for rel in tracked:
+                conn.execute("""INSERT INTO repository_files(repository_id,relative_path,extension,mime_type,
+                                  size_bytes,sha256,is_html_entry,copied)
+                                VALUES(?,?,?,?,100,'deadbeef',1,1)""",(rid,rel,'.html','text/html'))
+            conn.commit()
+            row=conn.execute("SELECT * FROM repositories WHERE id=?",(rid,)).fetchone()
+            with patch.object(collector,'ROOT',base), patch.object(collector,'OVERRIDES',{'p':{'entry_path':'game5/index.html'}}), \
+                 patch.object(collector,'clone_one',side_effect=AssertionError('reclassify must not clone')):
+                result=collector.reclassify_repo(conn,row)
+            self.assertEqual(result['status'],'reclassified')
+            self.assertEqual(self._row(conn,rid,'entry_path')['entry_path'],'game5/index.html')
+            conn.close()
+
+    def test_reclassify_skips_a_missing_snapshot_instead_of_inventing_one(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base=Path(tmp)
+            conn,rid,tracked=self._fixture(base,{'index.html':'<!doctype html><title>g</title>'})
+            row=dict(conn.execute("SELECT * FROM repositories WHERE id=?",(rid,)).fetchone())
+            row['clone_path']='games/_repos/does-not-exist'
+            with patch.object(collector,'ROOT',base):
+                self.assertEqual(collector.reclassify_repo(conn,row)['status'],'skipped')
+            conn.close()
+
+    def test_entry_path_override_picks_the_named_work_in_a_collection(self):
+        # A repository holding several games cannot be resolved by scoring alone.
+        with tempfile.TemporaryDirectory() as tmp:
+            base=Path(tmp)
+            files={'index.html':'<!doctype html><title>menu</title>'}
+            for n in (3,5):
+                files[f'game{n}/index.html']=f'<!doctype html><title>game{n}</title>'
+            conn,rid,tracked=self._fixture(base,files)
+            self._recollect(base,conn,rid,{'p':{'entry_path':'game5/index.html'}},tracked)
+            row=self._row(conn,rid,'entry_path,game_path,entry_confidence,playable_status')
+            self.assertEqual(row['entry_path'],'game5/index.html')
+            self.assertEqual(row['entry_confidence'],'explicit_override')
+            self.assertEqual(row['playable_status'],'entrypoint_found')
+            self.assertTrue(row['game_path'].endswith('game5/index.html'))
+            conn.close()
+
+
 class VendoredEntryConsistencyTests(unittest.TestCase):
     """A committed catalog must not claim entrypoints the checkout cannot serve."""
 
@@ -412,3 +577,169 @@ class VendoredEntryConsistencyTests(unittest.TestCase):
         ignores=(ROOT/'.gitignore').read_text(encoding='utf-8')
         self.assertIn('games/_repos/*',ignores)
         self.assertIn('!games/_repos/Time-dev-alt__Fable-5.1-Games/Soccer.html',ignores)
+
+
+class SurveyApplicationTests(unittest.TestCase):
+    """A measurement may reach the catalog only as a restrictive, evidenced status.
+
+    Before this existed the runtime statuses in the database had no writer at all, so
+    they could not be reproduced or traced back to a measurement.
+    """
+
+    def _conn(self, base, status='entrypoint_detected_not_vendored'):
+        (base/'config').mkdir(parents=True, exist_ok=True)
+        (base/'config/publication_approvals.json').write_text('{"approved_repositories": []}')
+        from db import connect, now
+        conn = connect(base/'catalog.sqlite')
+        conn.execute("INSERT INTO projects(id,slug,title,created_at,updated_at) VALUES('p','p','Sample',?,?)", (now(), now()))
+        conn.execute("""INSERT INTO repositories(full_name,owner,name,html_url,clone_url,clone_status,clone_path,commit_sha)
+                        VALUES('example/game','example','game','https://github.com/example/game',
+                               'https://github.com/example/game.git','cloned','games/_repos/example__game','deadbeef')""")
+        rid = conn.execute("SELECT id FROM repositories").fetchone()[0]
+        conn.execute("""INSERT INTO project_repositories(project_id,repository_id,entry_path,game_path,
+                          entry_confidence,playable_status,note) VALUES('p',?,?,?,'',?,?)""",
+                     (rid, 'index.html', 'games/_repos/example__game/index.html', status, ''))
+        conn.commit()
+        return conn, rid
+
+    def _survey(self, failure_class, fingerprints=True):
+        return {'captured_at': '2026-11-18T00:00:00+00:00',
+                'isolation': {'network_policy': 'off-loopback HTTP aborted'},
+                'entries': [{'key': 'k', 'entry': '_repos/example__game/index.html',
+                             'mode': 'gameplay', 'failure_class': failure_class,
+                             'fingerprints': ({'initial_pixels': 'x'} if fingerprints else None)}]}
+
+    def _status(self, conn, rid):
+        return conn.execute("SELECT playable_status FROM project_repositories WHERE repository_id=?",
+                            (rid,)).fetchone()[0]
+
+    def test_a_conclusion_is_written_and_the_project_aggregate_follows(self):
+        import sys
+        sys.path.insert(0, str(ROOT/'scripts'))
+        import apply_survey_to_catalog as applier
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            conn, rid = self._conn(base)
+            planned, _, _, _ = applier.plan(conn, self._survey('SANDBOX_OPAQUE_ORIGIN_BREAKS_OWN_SCRIPT'),
+                                           'survey.json', 'a'*64)
+            self.assertEqual(len(planned), 1)
+            applier.apply_plan(conn, planned)
+            self.assertEqual(self._status(conn, rid), 'sandbox_incompatible')
+            note = conn.execute("SELECT note FROM project_repositories WHERE repository_id=?", (rid,)).fetchone()[0]
+            self.assertIn('sha256', note)
+            self.assertEqual(conn.execute("SELECT playable_status FROM projects WHERE id='p'").fetchone()[0],
+                             'sandbox_incompatible')
+            conn.close()
+
+    def test_a_new_finding_may_not_weaken_an_existing_harder_one(self):
+        import sys
+        sys.path.insert(0, str(ROOT/'scripts'))
+        import apply_survey_to_catalog as applier
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            conn, rid = self._conn(base, status='sandbox_incompatible')
+            planned, _, weaker, _ = applier.plan(conn, self._survey('NO_OBSERVABLE_RESPONSE'),
+                                                'survey.json', 'b'*64)
+            self.assertEqual(planned, [])
+            self.assertEqual(len(weaker), 1)
+            self.assertEqual(self._status(conn, rid), 'sandbox_incompatible')
+            conn.close()
+
+    def test_nothing_here_can_make_an_artifact_publishable(self):
+        import sys
+        sys.path.insert(0, str(ROOT/'scripts'))
+        import apply_survey_to_catalog as applier
+        for cls in ('PASS', 'OTHER', 'DRIVER_FLAKE_OR_TIMEOUT', 'INPUT_RESPONSIVE'):
+            self.assertNotIn(cls, applier.CLASS_TO_STATUS, cls)
+            self.assertNotIn('entrypoint_found', applier.CLASS_TO_STATUS.values(), cls)
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            conn, rid = self._conn(base)
+            planned, _, _, _ = applier.plan(conn, self._survey('PASS'), 'survey.json', 'c'*64)
+            self.assertEqual(planned, [])
+            self.assertEqual(self._status(conn, rid), 'entrypoint_detected_not_vendored')
+            conn.close()
+
+    def test_trustworthy_requires_timestamp_isolation_and_evidence_for_each_claim(self):
+        import sys
+        sys.path.insert(0, str(ROOT/'scripts'))
+        import apply_survey_to_catalog as applier
+        self.assertTrue(applier.survey_is_trustworthy(self._survey('NO_OBSERVABLE_RESPONSE'))[0])
+        no_stamp = self._survey('NO_OBSERVABLE_RESPONSE'); no_stamp['captured_at'] = ''
+        self.assertFalse(applier.survey_is_trustworthy(no_stamp)[0])
+        no_iso = self._survey('NO_OBSERVABLE_RESPONSE'); no_iso['isolation'] = {}
+        self.assertFalse(applier.survey_is_trustworthy(no_iso)[0])
+        no_evidence = self._survey('NO_OBSERVABLE_RESPONSE', fingerprints=False)
+        self.assertFalse(applier.survey_is_trustworthy(no_evidence)[0])
+        # An entry that failed before it could be measured claims nothing, so its
+        # missing fingerprints must not block the findings that do have evidence.
+        mixed = self._survey('NO_OBSERVABLE_RESPONSE')
+        mixed['entries'].append({'key': 'unmeasured', 'entry': '_repos/example__game/broken.html',
+                                 'mode': 'load', 'failure_class': 'DRIVER_FLAKE_OR_TIMEOUT',
+                                 'fingerprints': None})
+        self.assertTrue(applier.survey_is_trustworthy(mixed)[0])
+
+    def test_an_evidenced_pass_retracts_a_previous_restrictive_finding(self):
+        # A stale restrictive status must be correctable, or the catalog accumulates
+        # claims that later, equally evidenced measurement has refuted.
+        import sys
+        sys.path.insert(0, str(ROOT/'scripts'))
+        import apply_survey_to_catalog as applier
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            conn, rid = self._conn(base, status='sandbox_incompatible')
+            survey = self._survey('PASS')
+            survey['entries'][0]['status'] = 'BROWSER_LOAD_CHECKED'
+            survey['entries'][0]['iframe_isolation'] = True
+            planned, unchanged, weaker, _ = applier.plan(conn, survey, 'survey.json', 'd'*64)
+            self.assertEqual(len(planned), 1)
+            self.assertTrue(planned[0]['retraction'])
+            self.assertEqual(planned[0]['status'], 'entrypoint_found')
+            applier.apply_plan(conn, planned)
+            self.assertEqual(self._status(conn, rid), 'entrypoint_found')
+            note = conn.execute("SELECT note FROM project_repositories WHERE repository_id=?", (rid,)).fetchone()[0]
+            self.assertIn('retracts', note)
+            conn.close()
+
+    def test_a_pass_without_confirmed_isolation_cannot_retract_anything(self):
+        import sys
+        sys.path.insert(0, str(ROOT/'scripts'))
+        import apply_survey_to_catalog as applier
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            conn, rid = self._conn(base, status='sandbox_incompatible')
+            survey = self._survey('PASS')
+            survey['entries'][0]['status'] = 'BROWSER_LOAD_CHECKED'
+            survey['entries'][0]['iframe_isolation'] = False
+            planned, _, weaker, _ = applier.plan(conn, survey, 'survey.json', 'e'*64)
+            self.assertEqual(planned, [])
+            self.assertEqual(len(weaker), 1)
+            self.assertEqual(self._status(conn, rid), 'sandbox_incompatible')
+            conn.close()
+
+    def test_a_blocked_driver_may_claim_without_fingerprints_but_must_record_why(self):
+        import sys
+        sys.path.insert(0, str(ROOT/'scripts'))
+        import apply_survey_to_catalog as applier
+        blocked = self._survey('PAGE_BLOCKED_DRIVER', fingerprints=False)
+        blocked['entries'][0]['status'] = 'TIMEOUT_ABORTED'
+        blocked['entries'][0]['console_errors'] = []
+        self.assertFalse(applier.survey_is_trustworthy(blocked)[0])
+        blocked['entries'][0]['console_errors'] = ["hard timeout after 60s; the page blocked the driver "
+                                                   "and the process group was killed"]
+        self.assertTrue(applier.survey_is_trustworthy(blocked)[0])
+
+    def test_a_hand_written_survey_cannot_move_the_catalog(self):
+        import sys
+        sys.path.insert(0, str(ROOT/'scripts'))
+        import apply_survey_to_catalog as applier
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'forged.json'
+            path.write_text(json.dumps({'entries': [{'key': 'k',
+                'entry': '_repos/example__game/index.html', 'failure_class': 'NO_OBSERVABLE_RESPONSE'}]}))
+            with self.assertRaises(SystemExit):
+                import subprocess
+                proc = subprocess.run([sys.executable, str(ROOT/'scripts/apply_survey_to_catalog.py'),
+                                       '--survey', str(path), '--apply'], capture_output=True, text=True)
+                if proc.returncode:
+                    raise SystemExit(proc.stderr)

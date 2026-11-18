@@ -15,8 +15,13 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from input_attribution import (INPUT_RESPONSIVE, NOT_ATTRIBUTABLE, NO_OBSERVABLE_RESPONSE,
+                               input_attribution)
 
 ANALYTICS_HOSTS = ("gc.zgo.at", "google-analytics.com", "googletagmanager.com",
                    "plausible.io", "umami", "matomo", "posthog.com", "sentry.io")
@@ -24,16 +29,40 @@ CDN_HINTS = ("cdnjs.cloudflare.com", "cdn.jsdelivr.net", "unpkg.com",
              "esm.sh", "skypack.dev", "jsdelivr.net")
 
 
+def effective_status(report: dict, mode: str) -> str:
+    """Re-apply the input-attribution rule to recorded raw evidence.
+
+    The probes used to treat "pixels changed after input" as input response, which a
+    self-animating page satisfies without reacting to anything. Re-deriving here means
+    reports captured before that fix are read with the corrected rule instead of being
+    thrown away, and no report is ever re-interpreted upward.
+    """
+    measured = report.get("status")
+    if mode != "gameplay" or measured in ("INCOMPLETE_OR_FAILED", "TIMEOUT_ABORTED"):
+        return measured
+    if not any(k in report for k in ("input_changed_pixels", "input_changed_dom",
+                                     "idle_output_changed", "idle_dom_changed")):
+        return measured
+    return input_attribution(report)
+
+
 def classify(report: dict) -> str:
-    if report["status"] in ("BROWSER_LOAD_CHECKED", "INPUT_RESPONSIVE"):
+    if report["status"] in ("BROWSER_LOAD_CHECKED", INPUT_RESPONSIVE):
         return "PASS"
-    if report["status"] == "NO_OBSERVABLE_RESPONSE":
-        return "NO_OBSERVABLE_RESPONSE"
+    if report["status"] == NOT_ATTRIBUTABLE:
+        return NOT_ATTRIBUTABLE
+    if report["status"] == NO_OBSERVABLE_RESPONSE:
+        return NO_OBSERVABLE_RESPONSE
     if report["status"] == "TIMEOUT_ABORTED":
         return "PAGE_BLOCKED_DRIVER"
     errors = " ".join(str(e) for e in report.get("console_errors", []))
     blocked = " ".join(report.get("blocked_requests", []))
+    # Two shapes of the same root cause: the required sandbox gives the frame an
+    # opaque origin, so either its own module fails CORS, or a same-origin-only API
+    # (localStorage, serviceWorker, caches) throws when the page reads it.
     if "origin 'null'" in errors and "blocked by CORS policy" in errors:
+        return "SANDBOX_OPAQUE_ORIGIN_BREAKS_OWN_SCRIPT"
+    if "lacks the 'allow-same-origin' flag" in errors:
         return "SANDBOX_OPAQUE_ORIGIN_BREAKS_OWN_SCRIPT"
     if "Permissions policy violation" in errors:
         return "OPTIONAL_DEVICE_SENSOR_DENIED"
@@ -41,6 +70,10 @@ def classify(report: dict) -> str:
         return "THIRD_PARTY_ANALYTICS_BLOCKED"
     if any(host in blocked for host in CDN_HINTS):
         return "EXTERNAL_CDN_REQUIRED"
+    if "crash" in errors.lower():
+        # The renderer died, which on this 2-CPU / 4 GB Docker VM is an environment
+        # limit (SwiftShader + 1 GB container memory), not a statement about the page.
+        return "RENDERER_CRASHED_ENVIRONMENT_LIMIT"
     if "Locator.wait_for" in errors or "driver error" in errors:
         return "DRIVER_FLAKE_OR_TIMEOUT"
     if report.get("blocked_requests"):
@@ -82,11 +115,14 @@ def main():
         if report is None:
             untested.append({"key": item["key"], "entry": item["entry"], "mode": item["mode"]})
             continue
+        status = effective_status(report, item["mode"])
         entries.append({
             "key": item["key"], "repo": item.get("repo"), "mode": item["mode"],
-            "entry": item["entry"], "status": report["status"],
-            "failure_class": classify(report),
-            "gameplay_verified": bool(report.get("gameplay_verified")),
+            "entry": item["entry"], "status": status,
+            "status_at_measure_time": report["status"],
+            "failure_class": classify({**report, "status": status}),
+            "input_responsive": status == INPUT_RESPONSIVE,
+            "gameplay_verified": False,
             "render_changed_while_idle": bool(report.get("idle_output_changed")),
             "input_changed_pixels": bool(report.get("input_changed_pixels")),
             "input_changed_dom": bool(report.get("input_changed_dom")),
@@ -112,15 +148,23 @@ def main():
         "evidence_scope": (
             "Produced inside a disposable container with --network none, a read-only rootfs, a "
             "read-only artifact mount, dropped capabilities and a non-root user. INPUT_RESPONSIVE "
-            "means rendered output changed after synthetic pointer/keyboard input; it does not "
-            "prove correctness, completeness or authorship. A blocked request means the artifact "
-            "needs the network, which is a dependency finding, not necessarily a defect."
+            "means rendered output changed after synthetic pointer/keyboard input AND the same channel "
+            "was stable during the idle baseline; a difference on a page that repaints on its own is "
+            "recorded as INPUT_RESPONSE_NOT_ATTRIBUTABLE instead (see scripts/input_attribution.py). "
+            "It does not prove correctness, completeness or authorship. A blocked request means the artifact "
+            "needs the network, which is a dependency finding, not necessarily a defect. "
+            "counts.gameplay_verified is always 0 in this artifact: the strongest claim a "
+            "machine may make here is counts.input_responsive."
         ),
         "counts": {
             "manifest_entries": len(manifest),
             "measured": len(entries),
             "untested": len(untested),
-            "gameplay_verified": sum(1 for r in entries if r["gameplay_verified"]),
+            "input_responsive": sum(1 for r in entries if r["input_responsive"]),
+            # Always 0 in this artifact on purpose. Only the fail-closed evidence
+            # pipeline (build_runtime_evidence.py) may raise it, after human review;
+            # reacting to synthetic input is not the same as verified gameplay.
+            "gameplay_verified": 0,
             "by_status": statuses,
             "by_failure_class": classes,
         },
