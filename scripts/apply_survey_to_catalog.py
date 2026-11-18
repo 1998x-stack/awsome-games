@@ -36,6 +36,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from db import connect, now
+from playability_policy import (RESTRICTIVE_STATUS_PRIORITY,
+                                update_project_aggregates)
 
 # Only classes that ARE a conclusion about the artifact, mapped to the status that
 # states it. A class not listed here moves nothing: "we could not tell" must never be
@@ -50,18 +52,24 @@ CLASS_TO_STATUS = {
     "NO_OBSERVABLE_RESPONSE": "runtime_no_interaction",
 }
 
-# A measured PASS retracts a previous restrictive finding: if a later, equally evidenced
-# survey shows the artifact loads cleanly, leaving the old status in place would be a
-# stale claim. The row returns to the plain entrypoint state, and
-# mark_unvendored_entries.py then re-applies the vendoring distinction.
-RETRACTED_TO = "entrypoint_found"
+# An automated PASS may refute the previous restriction, but it is NOT gameplay
+# proof or an authorization to re-publish. Keep the mapping nonpublishable until
+# a separately reviewed affirmative recovery is approved.
+RETRACTED_TO = "runtime_needs_retest"
 
-# Ordered from "hardest to publish" to "least restrictive". A write that would move a
-# row DOWN this list is refused, unless it is an evidenced retraction of a PASS.
-PRECEDENCE = ["sandbox_incompatible", "runtime_verification_failed", "runtime_requires_network",
-              "runtime_third_party_beacon", "runtime_optional_sensor_denied",
-              "runtime_input_not_attributable", "runtime_no_interaction", "runtime_driver_timeout",
-              "runtime_needs_retest"]
+# Same restriction order as the repository collector / project aggregator.
+PRECEDENCE = RESTRICTIVE_STATUS_PRIORITY
+
+def pass_has_evidence(entry: dict) -> bool:
+    """Attributable, clean isolated LOAD evidence sufficient for *review only*."""
+    return (
+        entry.get("status") in ("BROWSER_LOAD_CHECKED", "INPUT_RESPONSIVE")
+        and entry.get("iframe_isolation") is True
+        and bool(entry.get("fingerprints"))
+        and not entry.get("console_errors")
+        and not entry.get("blocked_functional_requests")
+        and not entry.get("blocked_requests")
+    )
 
 
 def rank(status: str) -> int:
@@ -82,11 +90,14 @@ def survey_is_trustworthy(data: dict) -> tuple[bool, str]:
     # Only entries that actually make a claim need evidence. An entry that failed
     # before it could be measured has no fingerprints and no class, so it moves
     # nothing; demanding evidence from it would block legitimate findings.
-    claiming = [e for e in entries if CLASS_TO_STATUS.get(e.get("failure_class") or "")]
+    claiming = [e for e in entries if CLASS_TO_STATUS.get(e.get("failure_class") or "")
+                or e.get("failure_class") == "PASS"]
     if not claiming:
         return False, "survey states no conclusion for any entry"
     missing, unexplained = [], []
     for e in claiming:
+        if e.get("failure_class") == "PASS" and not pass_has_evidence(e):
+            return False, f"PASS lacks clean isolated evidence: {e.get('key')}"
         if e.get("fingerprints"):
             continue
         if e.get("failure_class") in NO_FINGERPRINT_CLASSES:
@@ -122,9 +133,12 @@ def locate(conn, survey_entry: str):
         ("games/_repos/" + repo_dir, "%/" + repo_dir)).fetchone()
     if repo is None:
         return None
-    return conn.execute(
+    matches = conn.execute(
         "SELECT project_id, playable_status FROM project_repositories "
-        "WHERE repository_id=? AND entry_path=?", (repo["id"], entry_rel)).fetchone()
+        "WHERE repository_id=? AND entry_path=?", (repo["id"], entry_rel)).fetchall()
+    # Same entry may map to multiple works in a collection. Never choose an
+    # arbitrary first project and rewrite only its evidence claim.
+    return matches[0] if len(matches) == 1 else None
 
 
 def plan(conn, data: dict, survey_name: str, digest: str):
@@ -139,15 +153,17 @@ def plan(conn, data: dict, survey_name: str, digest: str):
             if row is None:
                 unlocated.append(entry["key"])
                 continue
-            if not entry.get("fingerprints") or entry.get("iframe_isolation") is not True:
+            if not pass_has_evidence(entry):
                 weaker.append((entry["key"], row["playable_status"], "PASS without evidence"))
                 continue
-            if row["playable_status"] not in PRECEDENCE:
+            if row["playable_status"] not in PRECEDENCE or row["playable_status"] == RETRACTED_TO:
                 unchanged.append(entry["key"])
                 continue
-            note = (f"{RETRACTED_TO}: retracts a previous restrictive finding. The {data['captured_at']} "
-                    f"survey measured {entry.get('status')} with iframe isolation confirmed. "
-                    f"Evidence: {survey_name} sha256 {digest[:16]}.")
+            note = (f"{RETRACTED_TO}: retracts a previous restrictive finding without "
+                    f"authorizing publication. The {data['captured_at']} survey measured "
+                    f"{entry.get('status')} with clean iframe isolation. "
+                    f"Evidence: {survey_name} sha256 {digest[:16]}. "
+                    "Independent positive gameplay/rights approval is still required.")
             planned.append({"status": RETRACTED_TO, "note": note, "project_id": row["project_id"],
                             "entry": entry["entry"], "retraction": True})
             continue
@@ -186,14 +202,7 @@ def apply_plan(conn, planned) -> set:
                          "WHERE project_id=? AND repository_id=? AND entry_path=?",
                          (item["status"], item["note"], item["project_id"], repo["id"], entry_rel))
             touched.add(item["project_id"])
-        for project_id in touched:
-            statuses = [r[0] for r in conn.execute(
-                "SELECT playable_status FROM project_repositories WHERE project_id=?", (project_id,))]
-            best = next((x for x in PRECEDENCE if x in statuses),
-                        "entrypoint_detected_not_vendored" if "entrypoint_detected_not_vendored" in statuses
-                        else "entrypoint_found" if "entrypoint_found" in statuses else statuses[0])
-            conn.execute("UPDATE projects SET playable_status=?, updated_at=? WHERE id=?",
-                         (best, stamp, project_id))
+        update_project_aggregates(conn, touched, stamp)
     return touched
 
 

@@ -694,9 +694,9 @@ class SurveyApplicationTests(unittest.TestCase):
             planned, unchanged, weaker, _ = applier.plan(conn, survey, 'survey.json', 'd'*64)
             self.assertEqual(len(planned), 1)
             self.assertTrue(planned[0]['retraction'])
-            self.assertEqual(planned[0]['status'], 'entrypoint_found')
+            self.assertEqual(planned[0]['status'], 'runtime_needs_retest')
             applier.apply_plan(conn, planned)
-            self.assertEqual(self._status(conn, rid), 'entrypoint_found')
+            self.assertEqual(self._status(conn, rid), 'runtime_needs_retest')
             note = conn.execute("SELECT note FROM project_repositories WHERE repository_id=?", (rid,)).fetchone()[0]
             self.assertIn('retracts', note)
             conn.close()

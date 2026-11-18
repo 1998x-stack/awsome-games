@@ -11,6 +11,8 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse, urlsplit
 import requests
 from db import ROOT, connect, create_run, finish_run, log_error, now
+from playability_policy import (RUNTIME_REVIEWED_STATUSES, DECLARED_REVIEWED_STATUSES,
+                                update_project_aggregates)
 
 CACHE = ROOT / '.cache' / 'repos'
 DEST = ROOT / 'games' / '_repos'
@@ -20,30 +22,6 @@ SKIP_DIRS = {'.git','node_modules','.next','.nuxt','.turbo','.cache','.venv','ve
 SECRET_NAMES = {'.env','.env.local','.env.production','.npmrc','.pypirc','id_rsa','id_ed25519','credentials.json','service-account.json'}
 SECRET_SUFFIXES = {'.pem','.key','.p12','.pfx'}
 
-# Statuses established by isolated runtime testing (not derived guesses).
-# Re-collecting must never silently turn an artifact that was measured as
-# incompatible back into a publishable one — same rule as the research layer,
-# where a source refresh may not overwrite a reviewed conclusion.
-RUNTIME_REVIEWED_STATUSES = {
-    'sandbox_incompatible',            # breaks under the required opaque-origin sandbox
-    'runtime_verification_failed',
-    'runtime_requires_network',        # needs an external CDN/asset host
-    'runtime_third_party_beacon',      # loads third-party analytics
-    'runtime_optional_sensor_denied',  # needs a device sensor the sandbox denies
-    'runtime_no_interaction',          # loaded but never reacted to input
-    'runtime_driver_timeout',          # blocked the driver; hard-killed
-    'runtime_needs_retest',            # measurement was unreliable
-    'runtime_input_not_attributable',  # repaints on its own; input response not separable
-}
-
-# Statuses an editor may assert in config/project_overrides.json. They describe what
-# kind of program the work is (a settled fact about the source), not a runtime
-# measurement, so a refresh must preserve them rather than re-derive them. Each such
-# override is required to carry a note naming the evidence.
-DECLARED_REVIEWED_STATUSES = {
-    'not_browser_based',   # native engine/binary: no browser entrypoint exists
-    'requires_build',      # a build step (bundler/dev server) must run first
-}
 
 
 def run(cmd, cwd=None, timeout=600, check=True):
@@ -307,23 +285,13 @@ def classify_entrypoints(conn, repo_row, dest, files):
     for pid,entry,game_path,confidence,status,note in selected:
         conn.execute('UPDATE project_repositories SET entry_path=?,game_path=?,entry_confidence=?,playable_status=?,note=? WHERE project_id=? AND repository_id=?',
                      (entry,game_path,confidence,status,note,pid,repo_row['id']))
-    # Aggregate across all linked repositories: a failed mirror must not hide a
-    # separately imported and usable original source.
-    for m in mappings:
-        pid=m['project_id']
-        statuses=[x[0] for x in conn.execute('SELECT playable_status FROM project_repositories WHERE project_id=?',(pid,))]
-        best=('smoke_test_passed' if 'smoke_test_passed' in statuses else
-              'entrypoint_found' if 'entrypoint_found' in statuses else
-              'sandbox_incompatible' if 'sandbox_incompatible' in statuses else
-              next((x for x in ('runtime_requires_network', 'runtime_third_party_beacon',
-                                'runtime_optional_sensor_denied', 'runtime_input_not_attributable',
-                                'runtime_no_interaction', 'runtime_driver_timeout',
-                                'runtime_needs_retest', 'runtime_verification_failed'
-                                ) if x in statuses), '') or
-              'missing_assets' if 'missing_assets' in statuses else
-              'requires_build' if 'requires_build' in statuses else
-              'not_browser_based' if 'not_browser_based' in statuses else 'needs_review')
-        conn.execute('UPDATE projects SET source_status=?,playable_status=?,updated_at=? WHERE id=?',('cloned',best,now(),pid))
+    # Source collection and per-project playability are independent facts.
+    project_ids={m['project_id'] for m in mappings}
+    stamp=now()
+    for pid in project_ids:
+        conn.execute("UPDATE projects SET source_status='cloned', updated_at=? "
+                     "WHERE id=? AND source_status<>'cloned'", (stamp,pid))
+    update_project_aggregates(conn, project_ids, stamp)
     return selected
 
 
